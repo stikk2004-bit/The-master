@@ -258,14 +258,21 @@ def build(key):
         C.add_mustache(part, body, mats[spec.get("mustache_mat", spec.get("hair"))], kind, size)
     if spec.get("glasses"):
         C.add_glasses(part, body, mats["steel"])
+    # hats and carried things are their own meshes, so indoor scenes can take them off
+    hat_part = C.Part()
+    prop_part = C.Part()
     if spec.get("hat"):
-        C.add_hat(part, body, face, spec["hat"], mats[spec["hat_mat"]], mats.get(spec.get("band") or "", None))
+        C.add_hat(hat_part, body, face, spec["hat"], mats[spec["hat_mat"]], mats.get(spec.get("band") or "", None))
     if spec.get("prop"):
         pm = {"leather": mats["leather_brown"], "brass": mats["brass"], "wood": mats["wood"], "iron": mats["iron"],
               "lamp": mats["lamp"], "paper": mats["paper"]}
-        C.add_prop(part, body, spec["prop"], pm, "R")
+        C.add_prop(prop_part, body, spec["prop"], pm, "R")
 
     ob = part.build(key.capitalize() + "Body", coll, rig, smooth=True)
+    if hat_part.faces:
+        hat_part.build(key.capitalize() + "Hat", coll, rig, smooth=True)
+    if prop_part.faces:
+        prop_part.build(key.capitalize() + "Prop", coll, rig, smooth=True)
     anims.build_all(rig, body.k, set(spec.get("anims", ("base",))))
     sc.frame_start = 1
     sc.frame_end = 100

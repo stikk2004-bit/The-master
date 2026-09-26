@@ -429,8 +429,8 @@ func _build_eye() -> void:
 	eye.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	eye.offset_left = -60
 	eye.offset_right = 60
-	eye.offset_top = -210
-	eye.offset_bottom = -150
+	eye.offset_top = -330
+	eye.offset_bottom = -270
 	eye.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	eye.visible = false
 	root.add_child(eye)

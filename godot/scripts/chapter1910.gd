@@ -176,7 +176,11 @@ func _dress(root: Node) -> void:
 	for n in root.find_children("*", "Node3D", true, false):
 		var nm := String(n.name)
 		if nm.begins_with("MARK_"):
-			marks[nm.substr(5).split(".")[0]] = (n as Node3D).global_transform
+			# Blender numbers repeated names (seat_frank.001); the game wants the plain name
+			var key := nm.substr(5).split(".")[0]
+			if key.length() > 4 and key[key.length() - 4] == "_" and key.right(3).is_valid_int():
+				key = key.left(key.length() - 4)
+			marks[key] = (n as Node3D).global_transform
 		elif nm.begins_with("LIGHT_"):
 			var parts := nm.split("_")
 			var kind := parts[1] if parts.size() > 1 else "gas"
@@ -594,6 +598,7 @@ func _build_privatecar() -> void:
 	for key in seats.keys():
 		var a := _actor(key)
 		a.idle_anim = "SitTalk" if key in ["frank", "harry", "nelson"] else ("SitDrink" if key in ["ben", "abe"] else "Sit")
+		a.indoors()
 		a.place(mk(seats[key]), mk_yaw(seats[key]))
 		a.play(a.idle_anim, 0.0, randf_range(0.85, 1.1))
 	player.place(mk("pc_spawn"), mk_yaw("pc_spawn"))
@@ -799,6 +804,7 @@ func _build_meeting() -> void:
 		var a := _actor(key)
 		var seat: String = "seat_" + String(key)
 		a.idle_anim = "SitWrite" if key in ["arthur", "abe"] else ("SitTalk" if key in ["nelson", "paul", "frank"] else "Sit")
+		a.indoors()
 		a.place(mk(seat), mk_yaw(seat))
 		a.play(a.idle_anim, 0.0, randf_range(0.85, 1.1))
 	player.place(mk("mt_spawn"), mk_yaw("mt_spawn"))
@@ -952,3 +958,76 @@ func _until(cond: Callable, timeout: float) -> void:
 		t += get_process_delta_time()
 	if t >= timeout:
 		print("AUTOTEST timed out waiting")
+
+
+## godot --headless --path godot -- --stealthtest
+## A careful simulated player: waits in cover until both watchmen are far from the next
+## stretch, then sneaks it. Reports detection along the way. Then a careless run in the open.
+func stealthtest() -> void:
+	start()
+	await _settle("hoboken")
+	skipping = true
+	await _until(func() -> bool: return stage == "stealth", 120.0)
+	await get_tree().create_timer(0.5).timeout
+	# Blender (x, y) route points, converted to Godot (x, 0, -y)
+	var route := [Vector2(-14.2, -21.0), Vector2(-13.8, -12.0), Vector2(-12.0, -6.0), Vector2(-13.4, 2.0), Vector2(-12.4, 9.5),
+		Vector2(-9.0, 13.2), Vector2(-6.2, 13.2), Vector2(-2.0, 12.8), Vector2(1.4, 9.8), Vector2(2.0, 8.8)]
+	var caught_count := [0]
+	for g in guards:
+		g.caught.connect(func() -> void: caught_count[0] += 1)
+	player.sneaking = true
+	player.enabled = false
+	var t0 := Time.get_ticks_msec()
+	var peak := 0.0
+	for i in range(1, route.size()):
+		var a3 := Vector3(route[i - 1].x, player.global_position.y, -route[i - 1].y)
+		var b3 := Vector3(route[i].x, player.global_position.y, -route[i].y)
+		# wait for a gap
+		var waited := 0.0
+		while waited < 40.0:
+			var clear := true
+			for g in guards:
+				var d := _seg_dist(g.global_position, a3, b3)
+				if d < 11.0:
+					clear = false
+			if clear:
+				break
+			await get_tree().physics_frame
+			waited += get_physics_process_delta_time()
+		var dist := a3.distance_to(b3)
+		var tt := 0.0
+		while tt < dist / 1.35:
+			tt += get_physics_process_delta_time()
+			var p := a3.lerp(b3, clampf(tt * 1.35 / dist, 0.0, 1.0))
+			player.global_position = Vector3(p.x, player.global_position.y, p.z)
+			player.noise = 0.08
+			for g in guards:
+				peak = maxf(peak, g.detection)
+			await get_tree().physics_frame
+		print("STEALTH leg ", i, " done after waiting %.1fs, peak detection %.2f, caught %d" % [waited, peak, caught_count[0]])
+	print("STEALTH careful run: %.0fs, peak %.2f, caught %d" % [(Time.get_ticks_msec() - t0) / 1000.0, peak, caught_count[0]])
+	print("STEALTH reached vestibule: ", player.global_position.distance_to(mk("vestibule")) < 1.4)
+	# careless: stand up and walk down the middle of track A under the detective's nose
+	_caught_busy = false
+	_stealth_on = true
+	for g in guards:
+		g.reset_to(g.global_position)
+		g.active = true
+	player.sneaking = false
+	var det = guards[0]
+	player.global_position = det.global_position + Vector3(sin(det.model.rotation.y), 0, cos(det.model.rotation.y)) * 6.0
+	var before: int = caught_count[0]
+	var w := 0.0
+	while w < 8.0 and caught_count[0] == before:
+		player.noise = 0.35
+		await get_tree().physics_frame
+		w += get_physics_process_delta_time()
+	print("STEALTH careless run caught: ", caught_count[0] > before, " after %.1fs" % w)
+	get_tree().quit()
+
+
+func _seg_dist(p: Vector3, a: Vector3, b: Vector3) -> float:
+	var ab := Vector2(b.x - a.x, b.z - a.z)
+	var ap := Vector2(p.x - a.x, p.z - a.z)
+	var t := clampf(ap.dot(ab) / maxf(ab.length_squared(), 1e-6), 0.0, 1.0)
+	return (ap - ab * t).length()

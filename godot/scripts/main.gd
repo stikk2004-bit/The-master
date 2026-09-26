@@ -80,6 +80,10 @@ func _ready() -> void:
 	ambience = AudioStreamPlayer.new()
 	ambience.volume_db = -10.0
 	add_child(ambience)
+	if OS.get_cmdline_user_args().has("--stealthtest"):
+		_build_level("exterior")
+		chapter.stealthtest()
+		return
 	if OS.get_cmdline_user_args().has("--autotest"):
 		_build_level("exterior")
 		player.place(SPAWN_EXTERIOR, 0.0)
@@ -903,6 +907,20 @@ func _run_shot() -> void:
 		cam.current = true
 	player.enabled = false
 	hud.visible_title(false)
+	if shot.has("debug"):
+		for k in chapter.marks.keys():
+			print("MARK ", k, " ", (chapter.marks[k] as Transform3D).origin)
+		for k in chapter.actors.keys():
+			var a = chapter.actors[k]
+			print("ACTOR ", k, " ", a.global_position, " visible=", a.visible, " yaw=", a.model.rotation.y)
+	if shot.has("hud"):
+		# show every piece of the interface at once, for checking the look
+		hud.show_location("The Grand Lobby", "The Jekyll Island Club")
+		hud.set_objective("Slip aboard at the car's dark front end. Stay out of the lamplight.")
+		hud.say("Nelson", "Nobody writes a last name down on this trip. Not on a menu card, not on a telegram.", 20.0)
+		hud.set_prompt("Serve the gentleman")
+		hud.set_sneak(true, 0.55)
+		hud.letterbox(true, 0.1)
 	var frames := int(shot.get("frames", "60"))
 	for i in frames:
 		await get_tree().process_frame

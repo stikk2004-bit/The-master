@@ -62,6 +62,14 @@ func play(anim_name: String, blend := 0.3, spd := 1.0) -> void:
 	current = anim_name
 
 
+func indoors(on := true) -> void:
+	## hats off and hands free when they come inside
+	for n in model.find_children("*", "MeshInstance3D", true, false):
+		var nm := String(n.name)
+		if nm.ends_with("Hat") or nm.ends_with("Prop"):
+			(n as MeshInstance3D).visible = not on
+
+
 func place(pos: Vector3, yaw: float) -> void:
 	global_position = pos
 	model.rotation.y = yaw
