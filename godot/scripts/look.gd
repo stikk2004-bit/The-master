@@ -43,6 +43,8 @@ const MATS := {
 	"PalmettoGreen": ["palmetto", 1.0, {"orig": false, "grime": 0.0}],
 	"Palmetto": ["palmetto", 1.0, {"orig": false, "grime": 0.0}],
 	"Shrub": ["foliage", 1.3, {"orig": false, "tint": "#50584a", "grime": 0.0}],
+	"GroundsWood": ["wood_porch", 1.2, {"grime": 0.2}],
+	"GroundsStone": ["stone_blocks", 1.0, {"orig": false, "moss": 0.6, "bright": 0.85}],
 	"SpanishMoss": ["spanish_moss", 1.2, {"orig": false, "grime": 0.0}],
 	# ----- the Grand Lobby
 	"L_Parquet": ["wood_planks", 3.2, {"orig": false, "bright": 0.75, "grime": 0.25}],
@@ -181,6 +183,7 @@ const MATS := {
 ## Glowing Blender materials: [color, emission energy]
 const EMIT := {
 	"LampGlass": ["ff9a40", 0.22],
+	"LampFlame": ["ffa040", 5.0],
 	"GlassLit": ["ffb466", 0.6],
 	"L_Bulb": ["ffcc80", 2.2],
 	"T_Gold": ["ffc070", 1.0],
