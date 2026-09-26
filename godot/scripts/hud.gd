@@ -43,6 +43,8 @@ var sub_name: Label
 var sub_line: Label
 var objective: Label
 var timer_label: Label
+var mission
+const MissionUI := preload("res://scripts/mission_ui.gd")
 var card: VBoxContainer
 var card_title: Label
 var card_sub: Label
@@ -81,6 +83,9 @@ func _ready() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 	_build_bars()
+	mission = MissionUI.new()
+	root.add_child(mission)
+	mission.setup(self)
 	_build_title()
 	_build_banner()
 	_build_objective()
@@ -233,15 +238,9 @@ func _build_objective() -> void:
 
 
 func set_objective(text: String) -> void:
-	if _obj_tw:
-		_obj_tw.kill()
-	_obj_tw = create_tween()
-	if text == "":
-		_obj_tw.tween_property(objective, "modulate:a", 0.0, 0.6)
-		return
-	_obj_tw.tween_property(objective, "modulate:a", 0.0, 0.25)
-	_obj_tw.tween_callback(_set_objective_text.bind(text))
-	_obj_tw.tween_property(objective, "modulate:a", 1.0, 0.8)
+	## the objective now lives in the mission box (mission_ui.gd); the old line stays hidden
+	mission.set_objective(text)
+
 
 
 func _set_objective_text(text: String) -> void:
@@ -250,16 +249,8 @@ func _set_objective_text(text: String) -> void:
 
 func set_timer(text: String, urgent := false) -> void:
 	## a second line under the objective: a countdown, a tally of photographs
-	if timer_label == null:
-		timer_label = _label("", 19, Color(BONE, 0.85), serif_italic)
-		_shadow(timer_label)
-		timer_label.set_anchors_preset(Control.PRESET_TOP_LEFT)
-		timer_label.offset_left = 64
-		timer_label.offset_top = 64
-		root.add_child(timer_label)
-	timer_label.text = text
-	timer_label.visible = text != ""
-	timer_label.add_theme_color_override("font_color", Color("e0a070") if urgent else Color(BONE, 0.85))
+	mission.set_sub(text, urgent)
+
 
 
 # ------------------------------------------------------------------ subtitles

@@ -171,12 +171,12 @@ def cycle(ps, name, P, stance, a, lift, hip_base, bob, lean, arm_swing, elbow, r
         sw = arm_swing * math.cos(w)
         if carry:
             _carry_arm(ps, "L")
-            ps.rot("UpperArm.R", rx=-sw * 0.6, ry=0.0)
+            ps.rot("UpperArm.R", rx=-sw * 0.6, ry=-0.15)
             ps.rot("LowerArm.R", rx=-elbow)
         elif lantern:
             ps.rot("UpperArm.R", rx=-0.75 + 0.05 * math.sin(w * 2), ry=0.1)
             ps.rot("LowerArm.R", rx=-0.55)
-            ps.rot("UpperArm.L", rx=sw)
+            ps.rot("UpperArm.L", rx=sw, ry=0.15)
             ps.rot("LowerArm.L", rx=-elbow)
         elif sneak:
             for s2, sg in (("L", 1), ("R", -1)):
@@ -184,8 +184,9 @@ def cycle(ps, name, P, stance, a, lift, hip_base, bob, lean, arm_swing, elbow, r
                 ps.rot("LowerArm." + s2, rx=-1.0)
                 ps.rot("Hand." + s2, rx=0.2)
         else:
-            ps.rot("UpperArm.L", rx=sw, ry=0.06)
-            ps.rot("UpperArm.R", rx=-sw, ry=-0.06)
+            # held a little out from the body, so hands and cuffs clear the coat as they swing
+            ps.rot("UpperArm.L", rx=sw, ry=0.15)
+            ps.rot("UpperArm.R", rx=-sw, ry=-0.15)
             ps.rot("LowerArm.L", rx=-elbow - max(0.0, -sw) * 0.5)
             ps.rot("LowerArm.R", rx=-elbow - max(0.0, sw) * 0.5)
             ps.rot("Hand.L", rx=-0.1)
@@ -242,16 +243,16 @@ def idle(ps, name="Idle", seconds=3.0, sneak=False, carry=False, lantern=False, 
                 ps.rot("Head", rz=0.08 * math.sin(w * 0.5 + 1.0), rx=0.03 * breath)
             if carry:
                 _carry_arm(ps, "L")
-                ps.rot("UpperArm.R", rx=0.03, ry=-0.08)
+                ps.rot("UpperArm.R", rx=0.03, ry=-0.16)
                 ps.rot("LowerArm.R", rx=-0.25)
             elif lantern:
                 ps.rot("UpperArm.R", rx=-0.8, ry=0.1)
                 ps.rot("LowerArm.R", rx=-0.5)
-                ps.rot("UpperArm.L", rx=0.04, ry=0.1)
+                ps.rot("UpperArm.L", rx=0.04, ry=0.17)
                 ps.rot("LowerArm.L", rx=-0.25)
             else:
-                ps.rot("UpperArm.L", rx=0.03 + 0.02 * breath, ry=0.1)
-                ps.rot("UpperArm.R", rx=0.03 + 0.02 * breath, ry=-0.1)
+                ps.rot("UpperArm.L", rx=0.03 + 0.02 * breath, ry=0.17)
+                ps.rot("UpperArm.R", rx=0.03 + 0.02 * breath, ry=-0.17)
                 ps.rot("LowerArm.L", rx=-0.22)
                 ps.rot("LowerArm.R", rx=-0.22)
                 ps.rot("Hand.L", rx=-0.15)

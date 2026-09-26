@@ -28,6 +28,7 @@ STEP_RISE = 0.34     # car steps: tread tops at 1.46, 1.12, 0.78, 0.44
 DOOR_H = 2.05
 TRACK_A = -4.0
 TRACK_B = 4.0
+GATE = (-26.6, -24.4)  # the freight gate in the yard's south fence
 
 
 def mark(coll, name, loc, rz=0.0):
@@ -210,6 +211,7 @@ def yard():
 
     g = MB()
     g.box((-60, -60, -0.2), (60, 110, 0.0), m["cinder"])
+    g.box((-182, -60, -0.2), (-60, -8, 0.0), m["cinder"])
     g.obj("Yard_Ground-col", coll)
 
     tr = MB()
@@ -292,16 +294,33 @@ def yard():
 
     # ---------------- the street along the south end
     s = MB()
-    s.box((-60, -36.0, 0.0), (60, -27.0, 0.03), m["cobble"])
-    s.box((-60, -37.5, 0.0), (60, -36.0, 0.18), m["stone"])
+    s.box((-178, -36.0, 0.0), (60, -27.0, 0.03), m["cobble"])
+    s.box((-178, -37.5, 0.0), (60, -36.0, 0.18), m["stone"])
+    s.box((-178, -27.0, 0.0), (-29.0, -26.0, 0.18), m["stone"])   # the north walk, west of the yard
     s.obj("Street-col", coll)
     ss = MB()
     for i, x in enumerate((-20, 0, 30)):
         light(coll, "street", i, gas_lamp(ss, m, (x, -26.6, 0.0), 3.8))
+    for i, x in enumerate((-166, -134, -102, -70, -44)):
+        light(coll, "street", 10 + i, gas_lamp(ss, m, (x, -36.6 if i % 2 else -26.5, 0.18), 3.8))
     ss.obj("StreetLamps-col", coll)
+    # the far side of River Street, west of the yard: brick fronts, a few windows still lit
+    nb = MB()
+    x = -178.0
+    k = 0
+    while x < -50.0:
+        w = R.uniform(8, 12)
+        h = R.uniform(8, 13)
+        lit = building(nb, m, x, min(x + w - 0.2, -49.0), -25.8, -15.0, h, m["brick"] if k % 2 else m["brick_dark"], m["slate"],
+                       facing=(0, -1), lit=0.22, rows=(2.4, 5.6), spacing=2.8, win_w=1.0, win_h=1.7)
+        for j, pt in enumerate(lit[:1]):
+            light(coll, "window", 200 + k, pt)
+        x += w
+        k += 1
+    nb.obj("NorthFronts", coll)
     # row houses across the street
     rh = MB()
-    x = -60.0
+    x = -178.0
     while x < 60.0:
         w = R.uniform(6, 9)
         h = R.uniform(9, 14)
@@ -387,17 +406,108 @@ def yard():
     wl = MB()
     wl.box((-28.6, -27.0, 0.0), (-28.3, 90.0, 4.0), m["fence"])
     wl.box((-28.6, 78.0, 0.0), (28.0, 78.3, 4.0), m["fence"])
-    wl.box((-28.6, -27.4, 0.0), (8.0, -27.1, 4.0), m["fence"])
+    # the south fence, with the freight gate standing open between x -26.6 and -24.4
+    wl.box((-28.6, -27.4, 0.0), (GATE[0], -27.1, 4.0), m["fence"])
+    wl.box((GATE[1], -27.4, 0.0), (8.0, -27.1, 4.0), m["fence"])
     wl.box((11.0, -27.4, 0.0), (14.0, -27.1, 4.0), m["fence"])
     wl.box((13.7, -27.0, 0.0), (14.0, 78.0, 4.0), m["fence"])
+    # River Street: house fronts to the south, the north walk, both ends
+    wl.box((-180.0, -38.4, 0.0), (60.3, -38.1, 4.0), m["fence"])
+    wl.box((-180.0, -26.0, 0.0), (-28.6, -25.7, 4.0), m["fence"])
+    wl.box((26.0, -27.4, 0.0), (60.3, -27.1, 4.0), m["fence"])
+    wl.box((-180.3, -38.4, 0.0), (-180.0, -25.7, 4.0), m["fence"])
+    wl.box((60.0, -38.4, 0.0), (60.3, -27.1, 4.0), m["fence"])
     wl.obj("Bounds-colonly", coll)
-    # the yard's south railing, the part you can see
+    # the yard's south railing, the part you can see, and the gate
     rl = MB()
-    for x in range(-28, 8, 2):
-        rl.rod((x, -27.25, 0.0), (x, -27.25, 1.1), 0.03, m["iron"])
-    rl.rod((-28, -27.25, 1.05), (8, -27.25, 1.05), 0.03, m["iron"])
-    rl.rod((-28, -27.25, 0.55), (8, -27.25, 0.55), 0.03, m["iron"])
+    for x0, x1 in ((-28.0, GATE[0]), (GATE[1], 8.0)):
+        xx = x0
+        while xx <= x1 + 0.01:
+            rl.rod((xx, -27.25, 0.0), (xx, -27.25, 1.1), 0.03, m["iron"])
+            xx += 2.0
+        rl.rod((x0, -27.25, 1.05), (x1, -27.25, 1.05), 0.03, m["iron"])
+        rl.rod((x0, -27.25, 0.55), (x1, -27.25, 0.55), 0.03, m["iron"])
+    for gx in GATE:
+        rl.box((gx - 0.18, -27.43, 0.0), (gx + 0.18, -27.07, 1.6), m["stone"])
+        rl.box((gx - 0.22, -27.47, 1.6), (gx + 0.22, -27.03, 1.7), m["stone"])
+    # the gate leaf, swung back into the yard
+    for k in range(6):
+        rl.rod((GATE[0] + 0.1, -27.2 + 0.28 * k, 0.1), (GATE[0] + 0.1, -27.2 + 0.28 * k, 1.35), 0.02, m["iron"])
+    for zz in (0.15, 0.75, 1.3):
+        rl.rod((GATE[0] + 0.1, -27.2, zz), (GATE[0] + 0.1, -25.8, zz), 0.025, m["iron"])
     rl.obj("Railing", coll)
+    sg = MB()
+    sg.quad([(GATE[0] - 0.2, -27.48, 1.72), (GATE[1] + 0.2, -27.48, 1.72), (GATE[1] + 0.2, -27.48, 2.12), (GATE[0] - 0.2, -27.48, 2.12)], m["wood"])
+    sg.obj("GateBoard", coll)
+
+    # ---------------- places to hide and to climb
+    hd = MB()
+    # a freight wagon under a canvas tarp, low enough to crawl under; you can see the platform from there
+    tx, ty = -7.2, -16.8
+    hd.box((tx - 1.1, ty - 1.8, 0.75), (tx + 1.1, ty + 1.8, 0.85), m["wood"])
+    for wx in (-0.9, 0.9):
+        for wy in (-1.3, 1.3):
+            hd.cyl((tx + wx, ty + wy, 0.38), 0.38, 0.38, 0.08, m["iron"], seg=12, rot=Matrix.Rotation(math.pi / 2, 4, "Y") @ Matrix.Translation((0, 0, -0.04)))
+    hd.box((tx - 1.0, ty - 1.6, 0.85), (tx + 0.6, ty + 1.2, 1.6), m["crate_dark"])
+    for pts in ([(tx - 1.25, ty - 1.9, 0.3), (tx - 1.25, ty + 1.9, 0.3), (tx - 0.2, ty + 1.9, 1.95), (tx - 0.2, ty - 1.9, 1.95)],
+                [(tx - 0.2, ty - 1.9, 1.95), (tx - 0.2, ty + 1.9, 1.95), (tx + 1.25, ty + 1.9, 0.9), (tx + 1.25, ty - 1.9, 0.9)]):
+        hd.quad(pts, m["canvas"])
+        hd.quad(pts[::-1], m["canvas"])   # both sides, so it's still canvas when you're under it
+    hd.obj("TarpWagon", coll)
+    # an empty boxcar, its west door rolled open: somewhere to wait while the lantern goes by
+    ebc = MB()
+    y0, y1, X = -6.0, 5.8, TRACK_A
+    ebc.box((X - 1.4, y0 + 0.2, 1.0), (X + 1.4, y1 - 0.2, 1.35), m["t_iron"])
+    ebc.box((X - 1.35, y0, 1.35), (X + 1.35, y1, 1.45), m["wood"])
+    ebc.box((X - 1.35, y0, 4.1), (X + 1.35, y1, 4.25), m["roof"])
+    ebc.box((X - 1.35, y0, 1.45), (X + 1.35, y0 + 0.08, 4.1), m["boxcar"])
+    ebc.box((X - 1.35, y1 - 0.08, 1.45), (X + 1.35, y1, 4.1), m["boxcar"])
+    ebc.box((X + 1.27, y0, 1.45), (X + 1.35, y1, 4.1), m["boxcar"])
+    mid = (y0 + y1) / 2
+    ebc.box((X - 1.35, y0, 1.45), (X - 1.27, mid - 1.0, 4.1), m["boxcar"])
+    ebc.box((X - 1.35, mid + 1.0, 1.45), (X - 1.27, y1, 4.1), m["boxcar"])
+    ebc.box((X - 1.35, mid - 1.0, 3.6), (X - 1.27, mid + 1.0, 4.1), m["boxcar"])
+    ebc.box((X - 1.43, mid + 1.0, 1.5), (X - 1.37, mid + 3.0, 3.6), m["crate_dark"])   # the door, rolled back
+    for yy in (y0 + 2.2, y1 - 2.2):
+        truck(ebc, m, X, yy)
+    ebc.obj("EmptyBoxcar-col", coll)
+    ld = MB()
+    for i, yb in enumerate((y0, 14.0, 26.4, 39.0)):
+        # an iron ladder up the south end of each boxcar, by the west corner
+        for sx in (-5.25, -4.85):
+            ld.rod((sx, yb - 0.1, 1.0), (sx, yb - 0.1, 4.3), 0.02, m["iron"])
+        zz = 1.2
+        while zz < 4.25:
+            ld.rod((-5.25, yb - 0.1, zz), (-4.85, yb - 0.1, zz), 0.016, m["iron"])
+            zz += 0.35
+        mark(coll, "MARK_ladder_%d_bottom" % i, (-5.05, yb - 0.75, 0.0), 0.0)
+        mark(coll, "MARK_ladder_%d_top" % i, (-4.4, yb + 0.9, 4.25), 0.0)
+    ld.obj("Ladders", coll)
+    # the freight shed's dark doorway on the loading dock
+    dd = MB()
+    dd.box((-16.06, 3.0, 1.1), (-15.98, 5.4, 3.6), m["glass_dark"])
+    dd.obj("ShedDoorway", coll)
+    mark(coll, "MARK_hide_tarp", (tx - 0.1, ty, 0.0), -math.pi / 2)
+    mark(coll, "MARK_hide_tarp_out", (tx - 2.0, ty - 0.4, 0.0), -math.pi / 2)
+    mark(coll, "MARK_hide_boxcar", (X - 0.4, mid, 1.45), -math.pi / 2)
+    mark(coll, "MARK_hide_boxcar_out", (X - 2.4, mid, 0.0), -math.pi / 2)
+    mark(coll, "MARK_hide_shed", (-15.7, 4.2, 1.1), -math.pi / 2)
+    mark(coll, "MARK_hide_shed_out", (-14.2, 4.2, 0.0), -math.pi / 2)
+    # where the watchmen may go: spread over the yard; the game picks among these at random
+    spots = [(-20, -24), (-10, -24), (0, -24), (3, -19), (-3, -16), (-11.5, -20), (-12.5, -12), (-11, -3), (-12.5, 5), (-11.5, 12),
+             (-9, 17), (-10, 24), (-1.8, -10), (-1.5, 0), (-1.5, 10), (-1.5, 20), (-1.5, 32), (-6.4, -12), (-6.8, 8), (-6.6, 20),
+             (-6.6, 34), (0.9, -15), (0.9, -3), (0.9, 12), (0.9, 28), (-14.2, -5), (-14.2, 12), (-8, 30), (-1.5, 56), (8.2, -18), (9.4, -4)]
+    for i, (sx, sy) in enumerate(spots):
+        mark(coll, "MARK_spot_%d" % i, (sx, sy, 0.0))
+    # River Street: where the night starts, Jekyll and his motorcar, the gate, where to leave the car
+    mark(coll, "MARK_street_start", (-160.0, -33.2, 0.0), -math.pi / 2)
+    mark(coll, "MARK_jekyll", (-153.2, -28.4, 0.18), math.pi * 0.8)
+    mark(coll, "MARK_jcar", (-150.0, -30.4, 0.03), -math.pi / 2)
+    mark(coll, "MARK_cam_jekyll", (-156.5, -32.6, 1.75))
+    mark(coll, "MARK_cam_jekyll_look", (-153.0, -28.6, 1.5))
+    mark(coll, "MARK_park", (-21.0, -30.6, 0.03), -math.pi / 2)
+    mark(coll, "MARK_gate_out", (-25.5, -29.0, 0.0), 0.0)
+    mark(coll, "MARK_gate_in", (-25.5, -25.0, 0.0), 0.0)
 
     # ---------------- where things happen
     mark(coll, "MARK_player_start", (-14.2, -21.0, 0.0), 0.0)

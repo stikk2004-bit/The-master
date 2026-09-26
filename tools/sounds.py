@@ -243,9 +243,20 @@ def shot():
     write("shot", lowpass(boom + roll + echo, 1200), 0.8)
 
 
+def motor():
+    """A 1910 motorcar ticking over: a low two-stroke-ish chug and some rattle. Loops."""
+    sec = 2.0
+    t = t_axis(sec)
+    f = 24.0
+    chug = np.sign(np.sin(2 * np.pi * f * t)) * 0.5 + np.sin(2 * np.pi * f * 2 * t) * 0.3
+    chug = lowpass(chug, 260) * (0.7 + 0.3 * np.sin(2 * np.pi * 3 * t))
+    rattle = bandpass(noise(sec), 900, 2600) * (0.5 + 0.5 * np.sin(2 * np.pi * f * t) ** 8) * 0.25
+    write("motor", seamless(chug + rattle, 0.3), 0.7)
+
+
 if __name__ == "__main__":
     import sys
     only = sys.argv[1:]
-    for fn in (yard, train, fire, marsh, crickets, room, whistle, door, shutter, shot):
+    for fn in (yard, train, fire, marsh, crickets, room, whistle, door, shutter, shot, motor):
         if not only or fn.__name__ in only:
             fn()

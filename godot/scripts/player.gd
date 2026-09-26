@@ -2,6 +2,10 @@ extends CharacterBody3D
 ## Third-person player: WASD relative to the camera, mouse orbit, Shift to run, C to sneak.
 ## Can change clothes (the steward's jacket on the train), carry a tray and hold up a pocket Kodak.
 ## The tray and the camera follow the left hand but stay level, whatever the arm is doing.
+## The Kodak is an item once you have it (has_camera): Q holds it up and you look through the
+## viewfinder, the wheel zooms, a click takes the picture (the shutter signal; the chapter decides
+## what's in it). Space against a crate or a ledge up to chest high climbs onto it. hide_at() tucks
+## you somewhere the watchmen can't see; you can still look about and use the camera from there.
 
 const WALK_SPEED := 2.3
 const RUN_SPEED := 6.0
@@ -14,6 +18,8 @@ const Look := preload("res://scripts/look.gd")
 const OUTFITS := {"club": "res://models/player.glb", "waiter": "res://models/player_waiter.glb"}
 
 signal served
+signal shutter
+signal camera_toggled(on: bool)
 
 var enabled := true
 var can_sneak := true
@@ -40,6 +46,15 @@ var one_shot := ""
 var last_safe := Vector3.ZERO
 var _safe_timer := 0.0
 var _pivot_h := 1.55
+var has_camera := false
+var can_photo := true
+var camera_up := false
+var fp_cam: Camera3D
+var fp_pitch := 0.0
+var zoom := 1.0
+var hidden := false
+var _hide_eye := 1.0
+var _mantle := false
 
 
 func _ready() -> void:
@@ -70,6 +85,11 @@ func _ready() -> void:
 	cam.current = true
 	cam_pivot.rotation.y = yaw
 	spring.rotation.x = pitch
+	fp_cam = Camera3D.new()
+	fp_cam.fov = 55.0
+	fp_cam.far = 800.0
+	fp_cam.top_level = true
+	add_child(fp_cam)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	# after the animation has moved the hand this frame
 	process_priority = 10
@@ -235,7 +255,111 @@ func set_kodak(on: bool) -> void:
 	kodak.add_child(lens)
 
 
+func set_camera_up(on: bool) -> void:
+	## hold the Kodak up to your eye (first person, through the viewfinder) or put it away
+	if on and (not has_camera or carrying):
+		return
+	if on == camera_up:
+		return
+	camera_up = on
+	if on:
+		fp_pitch = clampf(pitch + 0.28, -1.1, 0.9)
+		_place_fp_cam()
+		fp_cam.current = true
+	else:
+		cam.current = true
+	model.visible = not on and not hidden
+	set_kodak(on)
+	camera_toggled.emit(on)
+
+
+func eye_position() -> Vector3:
+	if hidden:
+		return global_position + Vector3(0.0, _hide_eye, 0.0)
+	return global_position + Vector3(0.0, 1.12 if sneaking else 1.62, 0.0)
+
+
+func _place_fp_cam() -> void:
+	fp_cam.global_transform = Transform3D(Basis.from_euler(Vector3(fp_pitch, yaw, 0.0)), eye_position())
+
+
+func hide_at(pos: Vector3, facing_yaw: float, eye_h := 1.0) -> void:
+	## tuck in somewhere out of sight: under a tarp, in a boxcar, in a doorway
+	hidden = true
+	_hide_eye = eye_h
+	velocity = Vector3.ZERO
+	noise = 0.0
+	set_physics_process(false)
+	global_position = pos
+	yaw = facing_yaw
+	cam_pivot.rotation.y = yaw
+	model.visible = false
+
+
+func unhide(pos: Vector3, facing_yaw: float) -> void:
+	hidden = false
+	set_physics_process(true)
+	place(pos, facing_yaw)
+	model.visible = not camera_up
+
+
+func _ray(from: Vector3, to: Vector3) -> Dictionary:
+	var q := PhysicsRayQueryParameters3D.create(from, to)
+	q.exclude = [get_rid()]
+	return get_world_3d().direct_space_state.intersect_ray(q)
+
+
+func _try_mantle() -> bool:
+	## climb onto whatever is in front of you, if its top is between knee and chest high
+	if carrying or camera_up or hidden or _mantle:
+		return false
+	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	var f := Vector3(sin(model.rotation.y), 0.0, cos(model.rotation.y))
+	if input.length() > 0.1:
+		f = (Basis(Vector3.UP, yaw) * Vector3(input.x, 0.0, input.y)).normalized()
+	var base := global_position
+	var hit := _ray(base + Vector3(0, 0.75, 0), base + Vector3(0, 0.75, 0) + f * 0.9)
+	if hit.is_empty():
+		hit = _ray(base + Vector3(0, 1.5, 0), base + Vector3(0, 1.5, 0) + f * 0.9)
+		if hit.is_empty():
+			return false
+	var wall: Vector3 = hit["position"]
+	var probe := wall + f * 0.4
+	var top_hit := _ray(Vector3(probe.x, base.y + 2.7, probe.z), Vector3(probe.x, base.y + 0.3, probe.z))
+	if top_hit.is_empty():
+		return false
+	var top: Vector3 = top_hit["position"]
+	var n: Vector3 = top_hit["normal"]
+	var h := top.y - base.y
+	if h < 0.45 or h > 2.35 or n.y < 0.7:
+		return false
+	# room to stand up there, and nothing in the way of getting over the edge
+	if not _ray(top + Vector3(0, 0.1, 0), top + Vector3(0, 1.75, 0)).is_empty():
+		return false
+	if not _ray(base + Vector3(0, h + 0.3, 0), Vector3(probe.x, top.y + 0.3, probe.z)).is_empty():
+		return false
+	_mantle = true
+	velocity = Vector3.ZERO
+	noise = 0.45
+	model.rotation.y = atan2(f.x, f.z)
+	_play("Run")
+	var tw := create_tween()
+	tw.tween_property(self, "global_position", Vector3(base.x, top.y + 0.06, base.z), 0.18 + h * 0.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(self, "global_position", top + f * 0.2 + Vector3(0, 0.06, 0), 0.22)
+	tw.tween_callback(_end_mantle)
+	return true
+
+
+func _end_mantle() -> void:
+	_mantle = false
+	velocity = Vector3.ZERO
+	current_anim = ""
+
+
 func _process(_delta: float) -> void:
+	if camera_up:
+		_place_fp_cam()
+		fp_cam.fov = lerpf(fp_cam.fov, 55.0 / zoom, 0.25)
 	# keep the tray and the camera level in the left hand
 	if _skel == null or _hand < 0 or (tray == null and kodak == null):
 		return
@@ -266,20 +390,36 @@ func _on_anim_finished(anim_name: StringName) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not enabled:
 		return
+	if event.is_action_pressed("camera") and has_camera and can_photo:
+		set_camera_up(not camera_up)
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var mm := event as InputEventMouseMotion
-		yaw -= mm.relative.x * MOUSE_SENS
-		pitch = clampf(pitch - mm.relative.y * MOUSE_SENS, -1.15, 0.35)
+		var sens := MOUSE_SENS / (zoom if camera_up else 1.0)
+		yaw -= mm.relative.x * sens
+		if camera_up:
+			fp_pitch = clampf(fp_pitch - mm.relative.y * sens, -1.2, 1.0)
+		else:
+			pitch = clampf(pitch - mm.relative.y * MOUSE_SENS, -1.15, 0.35)
 		cam_pivot.rotation.y = yaw
 		spring.rotation.x = pitch
 	elif event is InputEventMouseButton and event.is_pressed():
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT:
+			if camera_up and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+				shutter.emit()
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_UP:
-			spring.spring_length = maxf(1.8, spring.spring_length - 0.4)
+			if camera_up:
+				zoom = minf(5.0, zoom * 1.2)
+			else:
+				spring.spring_length = maxf(1.8, spring.spring_length - 0.4)
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			spring.spring_length = minf(10.0, spring.spring_length + 0.4)
+			if camera_up:
+				zoom = maxf(1.0, zoom / 1.2)
+			else:
+				spring.spring_length = minf(10.0, spring.spring_length + 0.4)
 	elif event.is_action_pressed("unstuck"):
 		respawn()
 	elif event.is_action_pressed("sneak") and can_sneak and not carrying:
@@ -289,6 +429,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if _mantle:
+		return
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
 
@@ -296,14 +438,18 @@ func _physics_process(delta: float) -> void:
 	var running := false
 	if enabled:
 		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-		running = Input.is_action_pressed("run") and not carrying
+		running = Input.is_action_pressed("run") and not carrying and not camera_up
 		if running and sneaking:
 			sneaking = false
-		if Input.is_action_just_pressed("jump") and is_on_floor() and not carrying:
+		if Input.is_action_just_pressed("jump") and is_on_floor() and not carrying and not camera_up:
+			if _try_mantle():
+				return
 			velocity.y = JUMP_VELOCITY
 			sneaking = false
 
 	var speed := RUN_SPEED if running else (SNEAK_SPEED if sneaking else WALK_SPEED)
+	if camera_up:
+		speed = minf(speed, 1.0)
 	var dir := Basis(Vector3.UP, yaw) * Vector3(input.x, 0.0, input.y)
 	if dir.length() > 1.0:
 		dir = dir.normalized()
@@ -318,7 +464,9 @@ func _physics_process(delta: float) -> void:
 			last_safe = global_position
 			_safe_timer = 0.0
 
-	if dir.length() > 0.1:
+	if camera_up:
+		model.rotation.y = yaw + PI
+	elif dir.length() > 0.1:
 		var target := atan2(dir.x, dir.z)
 		model.rotation.y = lerp_angle(model.rotation.y, target, 1.0 - exp(-12.0 * delta))
 

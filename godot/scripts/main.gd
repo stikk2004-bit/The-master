@@ -122,6 +122,7 @@ func _setup_input() -> void:
 	_bind("unstuck", [KEY_R])
 	_bind("sneak", [KEY_C, KEY_CTRL])
 	_bind("quality", [KEY_F9])
+	_bind("camera", [KEY_Q])
 
 
 func _bind(action: String, keys: Array) -> void:
@@ -1032,6 +1033,7 @@ func _run_shot() -> void:
 	if shot.has("setup"):
 		chapter.shot_setup(String(shot["setup"]))
 	if shot.has("debug"):
+		print("HUD root ", hud.root.size, " mission ", hud.mission.size, " anchors ", hud.mission.anchor_right, ",", hud.mission.anchor_bottom, " finder ", hud.mission.finder.size)
 		for k in chapter.marks.keys():
 			print("MARK ", k, " ", (chapter.marks[k] as Transform3D).origin)
 		for k in chapter.actors.keys():
