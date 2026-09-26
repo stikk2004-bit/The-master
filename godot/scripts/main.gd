@@ -11,6 +11,10 @@ const HudScript := preload("res://scripts/hud.gd")
 const Lessons := preload("res://scripts/lessons.gd")
 const MoneySimScript := preload("res://scripts/money_sim.gd")
 const NpcScript := preload("res://scripts/npc.gd")
+const Look := preload("res://scripts/look.gd")
+const Foliage := preload("res://scripts/foliage.gd")
+const PostShader := preload("res://shaders/post.gdshader")
+const SETTINGS_PATH := "user://settings.json"
 const HOODED_ROUTE := [Vector3(-6, 0, 9), Vector3(-15, 0, 14), Vector3(-17, 0, 28), Vector3(-12, 0, 42), Vector3(-5, 0, 46), Vector3(5, 0, 44), Vector3(14, 0, 36), Vector3(16, 0, 24), Vector3(12, 0, 14), Vector3(5, 0, 8)]
 const HOODED_LINES := ["\"Ask who made the money in your pocket. Then ask why.\"", "\"Every dollar in that bank was somebody's loan once.\"", "\"The men who met on that island in 1910 kept it quiet. You don't have to.\"", "\"Watch the flows, not the pile.\"", "He doesn't answer. He just nods toward the Library."]
 const GUESTBOOK_PATH := "user://guestbook.json"
@@ -41,12 +45,18 @@ var sim: Control = null
 var npc = null
 var npc_it: Dictionary = {}
 var npc_line := 0
+var quality := 2
+var light_gain := 1.0
+var shot: Dictionary = {}
 
 
 func _ready() -> void:
 	randomize()
+	_load_settings()
+	_parse_shot_args()
 	_setup_input()
 	_setup_environment()
+	_setup_post()
 	hud = HudScript.new()
 	add_child(hud)
 	hud.panel_closed.connect(_on_panel_closed)
@@ -56,9 +66,12 @@ func _ready() -> void:
 	_load_progress()
 	player = PlayerScript.new()
 	add_child(player)
-	_build_level("exterior")
-	player.place(SPAWN_EXTERIOR, 0.0)
-	hud.show_title()
+	if shot.is_empty():
+		_build_level("exterior")
+		player.place(SPAWN_EXTERIOR, 0.0)
+		hud.show_title()
+	else:
+		_run_shot()
 
 
 # ---------- input ----------
@@ -71,6 +84,8 @@ func _setup_input() -> void:
 	_bind("jump", [KEY_SPACE])
 	_bind("interact", [KEY_E])
 	_bind("unstuck", [KEY_R])
+	_bind("sneak", [KEY_C, KEY_CTRL])
+	_bind("quality", [KEY_F9])
 
 
 func _bind(action: String, keys: Array) -> void:
@@ -84,56 +99,62 @@ func _bind(action: String, keys: Array) -> void:
 
 # ---------- light and air ----------
 func _setup_environment() -> void:
-	var sm := ProceduralSkyMaterial.new()
-	sm.sky_top_color = Color("0d1827")
-	sm.sky_horizon_color = Color("c08455")
-	sm.sky_curve = 0.13
-	sm.ground_horizon_color = Color("3c3a34")
-	sm.ground_bottom_color = Color("10130f")
-	sm.sun_angle_max = 18.0
-	var sky := Sky.new()
-	sky.sky_material = sm
 	env = Environment.new()
-	env.sky = sky
-	env.tonemap_mode = Environment.TONE_MAPPER_AGX
-	env.tonemap_exposure = 1.0
-	env.glow_enabled = true
-	env.glow_intensity = 0.4
-	env.glow_bloom = 0.0
-	env.glow_hdr_threshold = 1.2
-	env.ssao_enabled = true
-	env.ssao_intensity = 1.0
+	Look.setup(env)
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
 	sun = DirectionalLight3D.new()
-	sun.light_color = Color("ffae78")
-	sun.light_energy = 1.0
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 120.0
-	sun.rotation_degrees = Vector3(-11.0, 38.0, 0.0)
 	add_child(sun)
 
 
+func _setup_post() -> void:
+	# vignette and grain, under the HUD
+	var layer := CanvasLayer.new()
+	layer.layer = 5
+	add_child(layer)
+	var rect := ColorRect.new()
+	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sm := ShaderMaterial.new()
+	sm.shader = PostShader
+	rect.material = sm
+	layer.add_child(rect)
+
+
+func _air(preset: String) -> void:
+	Look.apply_preset(env, sun, preset, quality)
+	light_gain = float(Look.PRESETS[preset].get("gain", 1.3))
+
+
 func _outdoor_air() -> void:
-	env.background_mode = Environment.BG_SKY
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 1.1
-	env.fog_enabled = true
-	env.fog_light_color = Color("8a7c6e")
-	env.fog_density = 0.005
-	env.fog_sky_affect = 0.25
-	sun.visible = true
+	_air("dusk")
+	RenderingServer.global_shader_parameter_set("ground_y", 0.0)
 
 
 func _indoor_air() -> void:
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color("0b0806")
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("8a6e4c")
-	env.ambient_light_energy = 1.15
-	env.fog_enabled = false
-	sun.visible = false
+	_air("interior")
+	RenderingServer.global_shader_parameter_set("ground_y", 0.0)
+
+
+func _load_settings() -> void:
+	if not FileAccess.file_exists(SETTINGS_PATH):
+		return
+	var data = JSON.parse_string(FileAccess.open(SETTINGS_PATH, FileAccess.READ).get_as_text())
+	if data is Dictionary:
+		quality = clampi(int(data.get("quality", 2)), 0, 2)
+
+
+func _save_settings() -> void:
+	FileAccess.open(SETTINGS_PATH, FileAccess.WRITE).store_string(JSON.stringify({"quality": quality}))
+
+
+func _cycle_quality() -> void:
+	quality = (quality + 2) % 3
+	Look.apply_quality(env, quality)
+	_save_settings()
+	hud.toast(["Graphics: low. Faster on older machines.", "Graphics: medium.", "Graphics: high. Fog, bounce light, the works."][quality], 3.0)
 
 
 # ---------- rooms ----------
@@ -173,11 +194,13 @@ func _build_level(level_name: String) -> void:
 			_build_library()
 
 
-func _instance(path: String) -> void:
+func _instance(path: String, extra := {}) -> Node3D:
 	var packed: PackedScene = load(path)
 	var n: Node3D = packed.instantiate()
 	level.add_child(n)
 	_ensure_collision(n)
+	Look.apply(n, extra)
+	return n
 
 
 func _ensure_collision(root: Node) -> void:
@@ -206,16 +229,22 @@ func _safety_floor() -> void:
 	level.add_child(body)
 
 
-func _omni(pos: Vector3, col: Color, energy: float, reach: float, flicker := true) -> OmniLight3D:
+func _omni(pos: Vector3, col: Color, energy: float, reach: float, flicker := true, shadow := false) -> OmniLight3D:
 	var l := OmniLight3D.new()
 	l.position = pos
 	l.light_color = col
-	l.light_energy = energy
+	l.light_energy = energy * light_gain
 	l.omni_range = reach
-	l.omni_attenuation = 0.9
+	l.omni_attenuation = 1.1
+	l.light_volumetric_fog_energy = 1.6
+	l.light_specular = 0.6
+	if shadow and quality >= 1:
+		l.shadow_enabled = true
+		l.shadow_blur = 1.5
+		l.shadow_bias = 0.05
 	level.add_child(l)
 	if flicker:
-		flicker_lights.append({"light": l, "base": energy, "seed": randf() * 100.0})
+		flicker_lights.append({"light": l, "base": energy * light_gain, "seed": randf() * 100.0})
 	return l
 
 
@@ -226,7 +255,8 @@ func add_interactable(pos: Vector3, radius: float, prompt: String, cb: Callable)
 # ---------- out front ----------
 func _build_exterior() -> void:
 	_outdoor_air()
-	_instance("res://models/clubhouse_exterior.glb")
+	var grounds := _instance("res://models/clubhouse_exterior.glb")
+	Foliage.dress(grounds, level, 7)
 	_safety_floor()
 	for z in [12.0, 24.0, 36.0, 48.0]:
 		for x in [-3.2, 3.2]:
@@ -253,6 +283,7 @@ func _talk_hooded() -> void:
 
 func _enter_lobby() -> void:
 	go_to("lobby", SPAWN_LOBBY, 0.0)
+	hud.show_location("The Grand Lobby", "The Jekyll Island Club")
 
 
 func _add_fireflies() -> void:
@@ -320,10 +351,12 @@ func _build_lobby() -> void:
 
 func _exit_to_porch() -> void:
 	go_to("exterior", SPAWN_PORCH, PI)
+	hud.show_location("The Grounds", "Dusk, Picayune, Mississippi")
 
 
 func _enter_library() -> void:
 	go_to("library", SPAWN_LIBRARY, 0.0)
+	hud.show_location("The Library", "The four studies")
 
 
 func _door_trading() -> void:
@@ -462,6 +495,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.is_action_pressed("ui_cancel") or (event.is_action_pressed("interact") and not hud.is_guestbook_open()):
 			hud.close_panel()
 			get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed("quality"):
+		_cycle_quality()
+		get_viewport().set_input_as_handled()
 		return
 	if busy:
 		return
@@ -755,3 +792,43 @@ func _open_envelope() -> void:
 		+ "Anybody can sit in on a lesson. If you'd like to talk about joining, for yourself or for your kids, write the club and tell us who you are and what you're trying to understand. We'll write back with a time to talk.\n\n"
 		+ "After that conversation, you sit in on three meetings on a first-name basis, with no dues and no commitment. Then your full name goes on the roll. The members decide who's asked to stay. Rank is given by the members, and it carries no fee.\n\n"
 		+ "[b]jekyllsclub@gmail.com[/b]")
+
+
+# ---------- screenshots for development ----------
+# godot --path godot -- --shot level=lobby pos=0,1.6,-3 look=0,1.4,-10 out=/tmp/lobby.png [frames=90]
+func _parse_shot_args() -> void:
+	var args := OS.get_cmdline_user_args()
+	if not args.has("--shot"):
+		return
+	for a in args:
+		var kv := String(a).split("=", true, 1)
+		if kv.size() == 2:
+			shot[kv[0]] = kv[1]
+
+
+func _vec(txt: String) -> Vector3:
+	var p := txt.split(",")
+	return Vector3(float(p[0]), float(p[1]), float(p[2]))
+
+
+func _run_shot() -> void:
+	var lvl := String(shot.get("level", "exterior"))
+	_build_level(lvl)
+	var ppos := _vec(String(shot.get("player", "0,0,0")))
+	player.place(ppos, float(shot.get("yaw", "0")))
+	if shot.has("pos"):
+		var cam := Camera3D.new()
+		cam.fov = float(shot.get("fov", "62"))
+		cam.far = 800.0
+		add_child(cam)
+		cam.global_position = _vec(String(shot["pos"]))
+		cam.look_at(_vec(String(shot.get("look", "0,1,0"))))
+		cam.current = true
+	player.enabled = false
+	hud.visible_title(false)
+	var frames := int(shot.get("frames", "60"))
+	for i in frames:
+		await get_tree().process_frame
+	var img := get_viewport().get_texture().get_image()
+	img.save_png(String(shot.get("out", "/tmp/shot.png")))
+	get_tree().quit()

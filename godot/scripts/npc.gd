@@ -4,6 +4,7 @@ extends Node3D
 
 const SPEED := 1.25
 const NOTICE_DISTANCE := 2.8
+const Look := preload("res://scripts/look.gd")
 
 var waypoints: Array = []
 var idx := 0
@@ -28,6 +29,7 @@ func _ready() -> void:
 	var packed: PackedScene = load("res://models/hooded_figure.glb")
 	model = packed.instantiate()
 	add_child(model)
+	Look.apply(model)
 	var players := model.find_children("*", "AnimationPlayer", true, false)
 	if players.size() > 0:
 		anim = players[0]
