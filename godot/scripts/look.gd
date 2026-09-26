@@ -48,8 +48,8 @@ const MATS := {
 	"L_Parquet": ["wood_planks", 3.2, {"orig": false, "bright": 0.75, "grime": 0.25}],
 	"L_WallGreen": ["wallpaper", 2.2, {"orig": false, "bright": 0.9}],
 	"L_Ceiling": ["plaster", 3.0, {"desat": 0.2, "bright": 0.75, "grime": 0.0}],
-	"L_Walnut": ["wood_dark", 1.4, {}],
-	"L_WalnutDark": ["wood_dark", 1.4, {}],
+	"L_Walnut": ["wood_dark", 1.0, {"nstr": 0.4}],
+	"L_WalnutDark": ["wood_dark", 1.0, {"nstr": 0.4}],
 	"L_Cream": ["painted_wood", 1.2, {"desat": 0.3, "bright": 0.78}],
 	"L_Leather": ["leather", 0.8, {}],
 	"L_Cork": ["cork", 0.8, {}],
@@ -74,6 +74,69 @@ const MATS := {
 	"Lib_Vol_3": ["leather", 0.3, {"grime": 0.0}],
 	"Lib_Vol_4": ["leather", 0.3, {"grime": 0.0}],
 	"Lib_Gilt": ["brass", 0.4, {"orig": false, "grime": 0.0}],
+	# ----- Hoboken, 1910
+	"HB_Cinder": ["gravel", 3.0, {"tint": "#6a6258", "grime": 0.0}],
+	"HB_Ballast": ["gravel", 1.6, {"orig": false, "bright": 0.8, "grime": 0.0}],
+	"HB_Tie": ["rough_timber", 1.2, {"tint": "#5a4a3a", "grime": 0.0}],
+	"HB_Rail": ["iron", 0.8, {"orig": false}],
+	"HB_PlatformTop": ["concrete", 3.0, {"desat": 0.2, "grime": 0.0}],
+	"HB_PlatformEdge": ["brick", 1.8, {"orig": false, "bright": 0.7}],
+	"HB_Brick": ["brick", 2.2, {"orig": false, "bright": 0.75, "moss": 0.1}],
+	"HB_BrickDark": ["brick", 2.4, {"orig": false, "bright": 0.45, "desat": 0.3}],
+	"HB_Stone": ["stone_blocks", 2.0, {"desat": 0.2}],
+	"HB_Tin": ["tin_roof", 2.2, {"orig": false, "bright": 0.7, "grime": 0.0}],
+	"HB_Iron": ["iron", 1.0, {"orig": false}],
+	"HB_Crate": ["rough_timber", 1.0, {"grime": 0.25}],
+	"HB_CrateDark": ["rough_timber", 1.0, {"grime": 0.0}],
+	"HB_Barrel": ["wood_planks", 0.9, {"vgrain": true, "grime": 0.3}],
+	"HB_Coal": ["gravel", 1.2, {"tint": "#2a2a2a", "rough": 0.6, "grime": 0.0}],
+	"HB_Cobble": ["cobblestone", 2.4, {"orig": false, "bright": 0.7, "grime": 0.0}],
+	"HB_Wood": ["wood_porch", 2.0, {"grime": 0.3}],
+	"HB_Slate": ["slate_roof", 3.0, {"orig": false, "grime": 0.0}],
+	"HB_Fence": ["rough_timber", 1.4, {"vgrain": true}],
+	"TR_Maroon": ["painted_metal", 2.0, {"nstr": 0.6, "grime": 0.0, "obj": true}],
+	"TR_Green": ["painted_metal", 2.0, {"nstr": 0.6, "grime": 0.0, "obj": true}],
+	"TR_Black": ["painted_metal", 2.0, {"nstr": 0.5, "grime": 0.0, "obj": true}],
+	"TR_Roof": ["tin_roof", 2.0, {"tint": "#3a3634", "grime": 0.0}],
+	"TR_Iron": ["iron", 1.0, {"orig": false, "bright": 0.8}],
+	"TR_Brass": ["brass", 0.5, {"orig": false}],
+	"TR_Boxcar": ["rough_timber", 1.2, {"vgrain": true, "grime": 0.3}],
+	"MC_Body": ["painted_metal", 1.2, {"nstr": 0.3, "rough": 0.6, "obj": true, "grime": 0.0}],
+	"MC_Trim": ["leather", 0.6, {"obj": true, "grime": 0.0}],
+	"MC_Tire": ["leather", 0.4, {"obj": true, "grime": 0.0}],
+	"MC_Leather": ["leather", 0.4, {"obj": true, "grime": 0.0}],
+	# ----- the private car
+	"PC_Mahogany": ["wood_dark", 0.9, {"grime": 0.15, "nstr": 0.4}],
+	"PC_Inlay": ["wood_light", 0.8, {"grime": 0.0}],
+	"PC_Ceiling": ["plaster", 2.0, {"desat": 0.1, "bright": 0.9, "grime": 0.0}],
+	"PC_Gilt": ["brass", 0.4, {"orig": false, "grime": 0.0}],
+	"PC_Carpet": ["rug", 2.2, {"tint": "#6a8a70", "desat": 0.2, "bright": 0.6, "grime": 0.0}],
+	"PC_Floor": ["wood_planks", 2.0, {}],
+	"PC_Tile": ["concrete", 1.2, {"grime": 0.3}],
+	"PC_Velvet": ["velvet", 0.5, {"grime": 0.0}],
+	"PC_Leather": ["leather", 0.5, {"grime": 0.0}],
+	"PC_Linen": ["linen", 0.4, {"grime": 0.0}],
+	"PC_Silver": ["iron_clean", 0.3, {"tint": "#e0dcd4", "rough": 0.4, "grime": 0.0}],
+	"PC_Iron": ["iron", 0.8, {"orig": false}],
+	"PC_Blind": ["linen", 0.4, {"grime": 0.0}],
+	"PC_Galley": ["painted_metal", 1.0, {"nstr": 0.5, "grime": 0.3}],
+	"PC_JacketWhite": ["linen", 0.3, {"grime": 0.0}],
+	"PC_Paper": ["paper", 0.4, {"grime": 0.0}],
+	"PC_Valise": ["leather", 0.4, {"grime": 0.0}],
+	# ----- the meeting room on Jekyll Island
+	"JK_Oak": ["wood_dark", 1.0, {"grime": 0.15, "nstr": 0.4}],
+	"JK_Plaster": ["plaster", 3.0, {"desat": 0.35, "bright": 0.8, "grime": 0.3, "nstr": 0.6}],
+	"JK_Floor": ["wood_planks", 3.0, {"orig": false, "bright": 0.8}],
+	"JK_Ceiling": ["plaster", 2.4, {"grime": 0.0}],
+	"JK_Stone": ["stone_blocks", 1.2, {"orig": false, "bright": 0.85}],
+	"JK_Brick": ["brick", 1.0, {"orig": false, "bright": 0.4}],
+	"JK_Baize": ["velvet", 0.4, {"grime": 0.0}],
+	"JK_Leather": ["leather", 0.5, {"grime": 0.0}],
+	"JK_Brass": ["brass", 0.4, {"orig": false, "grime": 0.0}],
+	"JK_Paper": ["paper", 0.35, {"grime": 0.0}],
+	"JK_Rug": ["rug", 3.0, {"orig": false, "bright": 0.6, "desat": 0.2, "grime": 0.0}],
+	"JK_Book": ["leather", 0.3, {"grime": 0.0}],
+	"JK_Gun": ["wood_dark", 0.5, {"grime": 0.0}],
 }
 
 ## Glowing Blender materials: [color, emission energy]
@@ -87,6 +150,27 @@ const EMIT := {
 	"T_Green": ["58c080", 0.9],
 	"Lib_Flame": ["ff9a3a", 4.0],
 	"Lib_LampGreen": ["2a7a4a", 0.6],
+	"HB_WindowLit": ["ffb060", 0.9],
+	"HB_LampGlass": ["ffb050", 1.2],
+	"TR_RedLamp": ["ff2a14", 2.5],
+	"TR_Headlamp": ["ffe0a0", 5.0],
+	"TR_Firebox": ["ff7020", 2.5],
+	"MC_Lamp": ["ffd890", 3.0],
+	"PC_Lamp": ["ffc070", 2.2],
+	"PC_StoveGlow": ["ff6a20", 2.0],
+	"JK_Lamp": ["ffc070", 2.2],
+	"JK_Fire": ["ff7020", 4.0],
+	"JK_Ember": ["ff4010", 1.4],
+}
+
+## Painted pictures that glow: [texture in res://textures/, emission energy]
+const IMG := {
+	"TR_Blinds": ["blinds.png", 1.6],
+	"TR_CoachWindow": ["coach_window.png", 0.5],
+	"HB_Skyline": ["skyline.png", 1.1],
+	"HB_Clock": ["clock_face.png", 0.5],
+	"JK_Window": ["marsh_window.png", 1.3],
+	"JK_Chalkboard": ["chalkboard_1910.png", 0.0],
 }
 
 static var _tex := {}
@@ -243,6 +327,9 @@ static func apply(root: Node, extra := {}, object_space := false) -> void:
 				continue
 			if nm.begins_with("CHX_"):
 				continue
+			if IMG.has(nm):
+				mi.set_surface_override_material(i, _picture(nm))
+				continue
 			if EMIT.has(nm) and src is BaseMaterial3D:
 				mi.set_surface_override_material(i, _glow(src as BaseMaterial3D, EMIT[nm]))
 				continue
@@ -257,6 +344,29 @@ static func apply(root: Node, extra := {}, object_space := false) -> void:
 			if src is BaseMaterial3D:
 				orig = (src as BaseMaterial3D).albedo_color
 			mi.set_surface_override_material(i, make(String(spec[0]), float(spec[1]), opts, orig))
+
+
+static func _picture(nm: String) -> StandardMaterial3D:
+	var key := "img|" + nm
+	if _made.has(key):
+		return _made[key]
+	var spec: Array = IMG[nm]
+	var tex: Texture2D = load(TEX + String(spec[0]))
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = tex
+	m.roughness = 0.6
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	if float(spec[1]) > 0.0:
+		m.emission_enabled = true
+		m.emission_texture = tex
+		m.emission_energy_multiplier = float(spec[1])
+	if nm == "HB_Skyline":
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		m.alpha_scissor_threshold = 0.5
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_made[key] = m
+	return m
 
 
 static func _glow(src: BaseMaterial3D, spec: Array) -> StandardMaterial3D:
@@ -312,13 +422,13 @@ const PRESETS := {
 	},
 	# Hoboken, 1910, a November night: cold moon through overcast, coal smoke, gas lamps
 	"night1910": {
-		"sky": {"zenith_color": "04060c", "horizon_color": "1c222c", "ground_color": "050505", "cloud_lit": "5a6272", "cloud_shade": "0c0e12", "cloud_cover": 0.7, "stars": 0.5, "moon_size": 0.0016, "moon_dir": Vector3(-0.35, 0.42, -0.84), "sun_glow": 0.0, "brightness": 1.0},
-		"sun": {"color": "8ea6d8", "energy": 0.22, "rot": Vector3(-28.0, -150.0, 0.0), "fog": 0.8},
-		"ambient": {"source": "color", "color": "303848", "energy": 0.35},
-		"fog": {"density": 0.035, "albedo": "6a707a", "emission": "000000", "aniso": 0.65, "length": 70.0, "sky_affect": 0.6},
-		"depth_fog": {"on": true, "color": "10141a", "density": 0.012, "sky": 0.4},
-		"grade": {"shadow": Color(0.88, 0.96, 1.1), "high": Color(1.08, 0.98, 0.86), "sat": 0.72, "contrast": 1.12, "lift": 0.005},
-		"exposure": 1.2, "glow": 0.75,
+		"sky": {"zenith_color": "070a14", "horizon_color": "2a3040", "ground_color": "060606", "cloud_lit": "6a7488", "cloud_shade": "12141a", "cloud_cover": 0.66, "stars": 0.5, "moon_size": 0.0016, "moon_dir": Vector3(-0.35, 0.42, -0.84), "sun_glow": 0.0, "brightness": 1.2},
+		"sun": {"color": "9ab0e0", "energy": 0.5, "rot": Vector3(-30.0, -150.0, 0.0), "fog": 0.8},
+		"ambient": {"source": "color", "color": "3e4a60", "energy": 0.6},
+		"fog": {"density": 0.03, "albedo": "70788a", "emission": "000000", "aniso": 0.65, "length": 70.0, "sky_affect": 0.5},
+		"depth_fog": {"on": true, "color": "141a22", "density": 0.009, "sky": 0.35},
+		"grade": {"shadow": Color(0.88, 0.96, 1.1), "high": Color(1.08, 0.98, 0.86), "sat": 0.75, "contrast": 1.1, "lift": 0.01},
+		"exposure": 1.5, "glow": 0.7, "gain": 1.5,
 	},
 	# inside the private car: brass lamps, mahogany, night rushing past
 	"train": {

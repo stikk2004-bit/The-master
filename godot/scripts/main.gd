@@ -13,6 +13,9 @@ const MoneySimScript := preload("res://scripts/money_sim.gd")
 const NpcScript := preload("res://scripts/npc.gd")
 const Look := preload("res://scripts/look.gd")
 const Foliage := preload("res://scripts/foliage.gd")
+const ChapterScript := preload("res://scripts/chapter1910.gd")
+const Sound := preload("res://scripts/sound.gd")
+const CHAPTER_LEVELS := ["hoboken", "privatecar", "jekyll", "meeting"]
 const PostShader := preload("res://shaders/post.gdshader")
 const SETTINGS_PATH := "user://settings.json"
 const HOODED_ROUTE := [Vector3(-6, 0, 9), Vector3(-15, 0, 14), Vector3(-17, 0, 28), Vector3(-12, 0, 42), Vector3(-5, 0, 46), Vector3(5, 0, 44), Vector3(14, 0, 36), Vector3(16, 0, 24), Vector3(12, 0, 14), Vector3(5, 0, 8)]
@@ -48,6 +51,9 @@ var npc_line := 0
 var quality := 2
 var light_gain := 1.0
 var shot: Dictionary = {}
+var chapter: Node
+var ambience: AudioStreamPlayer
+var gave_ticket := false
 
 
 func _ready() -> void:
@@ -66,6 +72,19 @@ func _ready() -> void:
 	_load_progress()
 	player = PlayerScript.new()
 	add_child(player)
+	chapter = ChapterScript.new()
+	add_child(chapter)
+	chapter.main = self
+	chapter.hud = hud
+	chapter.player = player
+	ambience = AudioStreamPlayer.new()
+	ambience.volume_db = -10.0
+	add_child(ambience)
+	if OS.get_cmdline_user_args().has("--autotest"):
+		_build_level("exterior")
+		player.place(SPAWN_EXTERIOR, 0.0)
+		chapter.autotest()
+		return
 	if shot.is_empty():
 		_build_level("exterior")
 		player.place(SPAWN_EXTERIOR, 0.0)
@@ -138,6 +157,13 @@ func _indoor_air() -> void:
 	RenderingServer.global_shader_parameter_set("ground_y", 0.0)
 
 
+func _ambience(kind: String) -> void:
+	var st := Sound.loop(kind)
+	if ambience.stream != st or not ambience.playing:
+		ambience.stream = st
+		ambience.play()
+
+
 func _load_settings() -> void:
 	if not FileAccess.file_exists(SETTINGS_PATH):
 		return
@@ -166,11 +192,15 @@ func go_to(level_name: String, pos: Vector3, facing: float) -> void:
 	hud.set_prompt("")
 	await hud.fade_to(1.0, 0.45).finished
 	_build_level(level_name)
-	player.place(pos, facing)
+	var story := CHAPTER_LEVELS.has(level_name)
+	if not story:
+		player.place(pos, facing)
 	await get_tree().create_timer(0.2).timeout
 	player.enabled = true
 	busy = false
-	await hud.fade_to(0.0, 0.6).finished
+	hud.fade_to(0.0, 0.8)
+	if story:
+		chapter.after_enter(level_name)
 
 
 func _build_level(level_name: String) -> void:
@@ -185,6 +215,11 @@ func _build_level(level_name: String) -> void:
 	level = Node3D.new()
 	level.name = level_name
 	add_child(level)
+	if CHAPTER_LEVELS.has(level_name):
+		ambience.stop()
+		chapter.build(level_name, level)
+		return
+	chapter.ambience.stop()
 	match level_name:
 		"exterior":
 			_build_exterior()
@@ -267,6 +302,7 @@ func _build_exterior() -> void:
 	_omni(Vector3(-1.95, 2.7, 0.8), Color("ffd08a"), 0.5, 5.0)
 	_omni(Vector3(1.95, 2.7, 0.8), Color("ffd08a"), 0.5, 5.0)
 	_add_fireflies()
+	_ambience("crickets")
 	add_interactable(Vector3(0.0, 1.5, 1.0), 1.5, "Go inside", _enter_lobby)
 	add_interactable(Vector3(7.5, 1.0, 16.0), 2.8, "Read the club sign", _on_sign)
 	npc = NpcScript.new()
@@ -277,8 +313,23 @@ func _build_exterior() -> void:
 
 
 func _talk_hooded() -> void:
+	if gave_ticket:
+		_take_ticket()
+		return
 	hud.toast(HOODED_LINES[npc_line % HOODED_LINES.size()], 5.5)
 	npc_line += 1
+	if npc_line >= 3 and not gave_ticket:
+		gave_ticket = true
+		await get_tree().create_timer(5.8).timeout
+		hud.toast("He holds out an old railroad ticket. Hoboken, November 22, 1910.", 5.0)
+		if not npc_it.is_empty():
+			npc_it["prompt"] = "Take the old railroad ticket"
+
+
+func _take_ticket() -> void:
+	hud.toast("\"Watch who gets on that car. Listen to what they call each other.\"", 4.0)
+	await get_tree().create_timer(2.5).timeout
+	chapter.start()
 
 
 func _enter_lobby() -> void:
@@ -331,6 +382,7 @@ func _build_lobby() -> void:
 	_indoor_air()
 	_instance("res://models/lobby.glb")
 	_safety_floor()
+	_ambience("room")
 	_omni(Vector3(0.0, 4.0, -7.0), Color("ffcf8a"), 1.3, 20.0)
 	_omni(Vector3(-2.2, 1.9, -11.3), Color("ffd89a"), 0.5, 6.0)
 	_omni(Vector3(0.0, 2.8, -12.6), Color("ffcf8a"), 0.5, 8.0, false)
@@ -341,6 +393,7 @@ func _build_lobby() -> void:
 	add_interactable(Vector3(0.0, 1.0, -0.9), 1.4, "Step back outside", _exit_to_porch)
 	add_interactable(Vector3(-0.3, 1.0, -10.3), 1.7, "Sign the guest book", _open_guestbook)
 	add_interactable(Vector3(2.0, 1.0, -10.3), 1.0, "Ring the desk bell", _on_bell)
+	add_interactable(Vector3(1.0, 1.0, -10.3), 0.75, "Pick up the old railroad ticket on the desk", _desk_ticket)
 	add_interactable(Vector3(-6.5, 1.0, -12.8), 1.9, "Read the notice board", _on_notices)
 	add_interactable(Vector3(6.45, 1.0, -12.8), 1.9, "Look at the framed prints", _on_prints)
 	add_interactable(Vector3(-9.0, 1.0, -4.0), 1.2, "Go into the Library", _enter_library)
@@ -373,6 +426,14 @@ func _door_honey() -> void:
 
 func _room_door(title: String, text: String) -> void:
 	open_panel(title, text + "\n\n[i]This door opens in the next build.[/i]")
+
+
+func _desk_ticket() -> void:
+	open_panel("An old railroad ticket",
+		"[i]Hoboken, N.J.  November 22, 1910.  One passenger, private car, rear of the southbound train.[/i]\n\n"
+		+ "Somebody tucked it under the edge of the guest book. On the back, in pencil: [i]First names only.[/i]\n\n"
+		+ "The men who met on Jekyll Island that month kept it quiet for years. This is your way onto that platform.\n\n"
+		+ _link("ride1910", "Go to Hoboken, 1910"))
 
 
 func _on_bell() -> void:
@@ -455,7 +516,8 @@ func _on_panel_closed() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	chapter.tick(delta)
 	var t := Time.get_ticks_msec() / 1000.0
 	for f in flicker_lights:
 		var l: OmniLight3D = f["light"]
@@ -486,6 +548,14 @@ func _process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if chapter.in_scene:
+		if event.is_action_pressed("ui_cancel"):
+			chapter.request_skip()
+			get_viewport().set_input_as_handled()
+		elif event.is_action_pressed("interact") or event.is_action_pressed("jump"):
+			chapter.request_advance()
+			get_viewport().set_input_as_handled()
+		return
 	if sim != null:
 		if event.is_action_pressed("ui_cancel"):
 			sim.close_machine()
@@ -514,6 +584,7 @@ func _build_library() -> void:
 	env.ambient_light_color = Color("7a5a44")
 	_instance("res://models/library.glb")
 	_safety_floor()
+	_ambience("room")
 	_omni(Vector3(0.0, 3.9, -6.0), Color("ffcf8a"), 1.2, 16.0)
 	_omni(Vector3(3.6, 1.05, -6.4), Color("ffd89a"), 0.55, 4.5)
 	_omni(Vector3(1.2, 3.0, -11.6), Color("ff9a40"), 0.6, 6.0)
@@ -557,6 +628,12 @@ func _show(kind: String, title: String, body: String) -> void:
 
 
 func _on_link(meta: String) -> void:
+	if meta == "ride1910":
+		hud.close_panel()
+		chapter.start()
+		return
+	if chapter.on_link(meta):
+		return
 	var parts := meta.split(":")
 	match parts[0]:
 		"shelf":

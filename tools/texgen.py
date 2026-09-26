@@ -240,14 +240,15 @@ def edge_dist(u, v, w_cell, n_rows, bevel_u, bevel_v):
 def wood_grain(seed, rings=26.0, fiber=1.0, n=N):
     """Grain running along x. Returns (tone 0..1, fiber 0..1)."""
     x, y = grid(n)
-    w1 = fbm(3, 4, seed, aniso=6.0, n=n)
-    w2 = fbm(8, 3, seed + 5, aniso=4.0, n=n)
-    ring = y * rings + (w1 - 0.5) * 7.0 + (w2 - 0.5) * 1.2
+    w1 = fbm(2, 4, seed, aniso=8.0, n=n)
+    w2 = fbm(6, 3, seed + 5, aniso=10.0, n=n)
+    # quarter-sawn boards: the grain runs long and fairly straight, wandering only a little
+    ring = y * rings + (w1 - 0.5) * 2.2 + (w2 - 0.5) * 0.6
     r = 0.5 + 0.5 * np.sin(ring * 2 * np.pi)
-    r = r ** 2.2
+    r = r ** 1.6
     fib = fbm(64, 4, seed + 9, aniso=24.0, n=n)
     fine = fbm(256, 2, seed + 13, aniso=30.0, n=n)
-    tone = r * 0.55 + fib * 0.3 * fiber + fine * 0.15 * fiber
+    tone = r * 0.4 + fib * 0.4 * fiber + fine * 0.2 * fiber
     knots_f1, _, _ = worley(5, seed + 21, n)
     knot = smooth(0.035, 0.0, knots_f1)
     tone = np.clip(tone * (1 - knot * 0.5) + knot * 0.05, 0, 1)
@@ -283,8 +284,9 @@ def wood_planks(name, seed, base, dark, n_rows=8, min_len=0.35, max_len=1.0, gap
     save(name, alb, h, ro, ao, nstrength=nstr)
 
 
-def wood_solid(name, seed, base, dark, rings=22.0, rough=(0.45, 0.7), nstr=2.5):
+def wood_solid(name, seed, base, dark, rings=22.0, rough=(0.45, 0.7), nstr=1.2):
     tone, fib = wood_grain(seed, rings)
+    tone = 0.25 + tone * 0.6
     alb = lerp(col(dark)[None, None, :], col(base)[None, None, :], tone)
     alb = hue_jitter(alb, seed + 1, 0.012)
     scr = scratches(160, seed + 2, (0.01, 0.05), 1.0)
@@ -563,7 +565,7 @@ def painted_metal(name, seed, rivets=True):
             along = (sx * 32) % 1.0 - 0.5
             dd = np.sqrt(np.clip(np.abs(d_line) * 32, 0, None) ** 2 + (along) ** 2)
             riv = np.maximum(riv, smooth(0.28, 0.16, dd))
-    chips = smooth(0.84, 0.87, fbm(30, 5, seed + 1) + seam * 0.12)
+    chips = smooth(0.9, 0.92, fbm(40, 5, seed + 1) + seam * 0.08)
     grime = smooth(0.3, 1.0, fbm(5, 5, seed + 2, aniso=0.2))
     c = c * paint[..., None]
     c = lerp(c, np.array([0.12, 0.11, 0.1]), chips)
@@ -949,8 +951,8 @@ CATALOG = {
     "concrete": lambda: concrete("concrete", 19),
     "wood_planks": lambda: wood_planks("wood_planks", 20, "#7a5a3c", "#2e1f14"),
     "wood_porch": lambda: wood_planks("wood_porch", 21, "#8a8070", "#3a342c", n_rows=10, wear=0.8),
-    "wood_dark": lambda: wood_solid("wood_dark", 22, "#5a3a22", "#1c110a"),
-    "wood_light": lambda: wood_solid("wood_light", 23, "#b08a5c", "#5e4128", rings=16),
+    "wood_dark": lambda: wood_solid("wood_dark", 22, "#5a3a22", "#1c110a", rings=26),
+    "wood_light": lambda: wood_solid("wood_light", 23, "#b08a5c", "#5e4128", rings=20),
     "parquet": lambda: parquet("parquet", 24),
     "siding": lambda: siding("siding", 25),
     "painted_wood": lambda: painted_wood("painted_wood", 26),
