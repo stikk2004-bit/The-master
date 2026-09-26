@@ -205,11 +205,47 @@ def whistle():
     write("whistle", s * envv, 0.9)
 
 
+def door():
+    """A heavy door: the latch clicks, the hinges groan a little, the air moves."""
+    sec = 1.3
+    t = t_axis(sec)
+    s = np.zeros_like(t)
+    click = bandpass(noise(0.03), 1800, 5200) * env_ad(int(RATE * 0.03), 0.001, 0.006)
+    place(s, click * 1.2, 0.02)
+    place(s, click * 0.7, 0.07)
+    f = 170 + 60 * np.sin(2 * np.pi * 0.9 * t) + 25 * np.sin(2 * np.pi * 7.3 * t)
+    creak = np.sin(2 * np.pi * np.cumsum(f) / RATE) * (0.5 + 0.5 * np.sin(2 * np.pi * 31 * t))
+    creak = bandpass(creak + 0.3 * noise(sec), 180, 1400) * np.clip((t - 0.12) / 0.2, 0, 1) * np.exp(-np.maximum(0, t - 0.5) / 0.35)
+    air = lowpass(noise(sec), 300) * np.clip((t - 0.1) / 0.4, 0, 1) * np.exp(-np.maximum(0, t - 0.6) / 0.3)
+    write("door", s + creak * 0.35 + air * 0.5, 0.7)
+
+
+def shutter():
+    """A pocket Kodak's shutter: a small spring click, then the lever back."""
+    sec = 0.4
+    s = np.zeros(int(RATE * sec))
+    a = bandpass(noise(0.02), 2500, 7000) * env_ad(int(RATE * 0.02), 0.0005, 0.004)
+    b = bandpass(noise(0.03), 1200, 4000) * env_ad(int(RATE * 0.03), 0.001, 0.008)
+    place(s, a, 0.01)
+    place(s, b * 0.6, 0.16)
+    write("shutter", s, 0.8)
+
+
+def shot():
+    """A shotgun out on the marsh, far off: a thump, then the report rolling back off the water."""
+    sec = 3.0
+    t = t_axis(sec)
+    boom = lowpass(noise(sec), 900) * env_ad(len(t), 0.004, 0.12)
+    roll = lowpass(noise(sec), 350) * env_ad(len(t), 0.05, 0.9) * 0.45
+    echo = np.zeros_like(t)
+    place(echo, boom[: int(RATE * 0.6)] * 0.35, 0.55)
+    place(echo, boom[: int(RATE * 0.6)] * 0.15, 1.2)
+    write("shot", lowpass(boom + roll + echo, 1200), 0.8)
+
+
 if __name__ == "__main__":
-    yard()
-    train()
-    fire()
-    marsh()
-    crickets()
-    room()
-    whistle()
+    import sys
+    only = sys.argv[1:]
+    for fn in (yard, train, fire, marsh, crickets, room, whistle, door, shutter, shot):
+        if not only or fn.__name__ in only:
+            fn()

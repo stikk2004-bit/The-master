@@ -136,12 +136,22 @@ def gait(P, p, stance, a, lift, heel_lift=0.05, toe_off=0.5, strike=-0.25):
     return fwd, up, pitch, 0.0
 
 
-def cycle(ps, name, P, stance, a, lift, hip_base, bob, lean, arm_swing, elbow, run=False, sneak=False, carry=False, lantern=False):
-    frames = int(round(P * FPS))
+def cycle(ps, name, P, stance, a, lift, hip_base, bob, lean, arm_swing, elbow, run=False, sneak=False, carry=False, lantern=False,
+          v_ref=None, sway=0.035):
+    """One looping step cycle. v_ref, if given, sets the cycle length so the planted foot moves at
+    exactly v_ref meters a second: the game divides its walking speed by the same number, so feet
+    never slide however fast or slow a man walks."""
+    k = ps.k
+    if v_ref:
+        P = 2.0 * a * k / (stance * v_ref)
+        # sink the hips just enough that the legs can reach both ends of the stride
+        if not run and not sneak:
+            need = 0.85 - math.sqrt(max(0.85 ** 2 - a ** 2, 0.01))
+            hip_base = max(hip_base, need - bob + 0.008)
+    frames = max(8, int(round(P * FPS)))
     rig = ps.rig
     _clear(rig)
     act = _begin(rig, name)
-    k = ps.k
     for f in range(frames + 1):
         p = f / frames
         ps.reset()
@@ -153,7 +163,7 @@ def cycle(ps, name, P, stance, a, lift, hip_base, bob, lean, arm_swing, elbow, r
                                        toe_off=0.3 if sneak else (0.7 if run else 0.5))
             ps.leg(side, drop, fwd, up, pitch, toe)
         yaw = 0.07 * math.cos(w) * (1.4 if run else 1.0)
-        ps.rot("Hips", rx=lean * 0.3, rz=-yaw, ry=0.035 * math.sin(w))
+        ps.rot("Hips", rx=lean * 0.3, rz=-yaw, ry=sway * math.sin(w))
         ps.rot("Spine", rx=lean * 0.5, rz=yaw * 0.6)
         ps.rot("Chest", rx=lean * 0.3 + (0.02 * math.sin(2 * w)), rz=yaw * 0.9)
         ps.rot("Neck", rx=-lean * 0.55)
@@ -370,19 +380,29 @@ def serve(ps, name="Serve", seconds=2.0):
     _finish(rig, act, name, frames, cyclic=False)
 
 
-def build_all(rig, k, kinds):
+## the speeds the game divides by when it plays each cycle (actor.gd WALK_REF, player.gd)
+WALK_V = 1.7
+RUN_V = 3.9
+SNEAK_V = 1.0
+
+
+def build_all(rig, k, kinds, gait=None):
+    """gait: this man's own walk (stride a, stance, lean, arm_swing, elbow, lift, bob, sway)."""
     ps = Poser(rig, k)
+    g = {"stance": 0.6, "a": 0.36, "lift": 0.11, "hip_base": 0.045, "bob": 0.018, "lean": 0.04, "arm_swing": 0.32, "elbow": 0.22, "sway": 0.035}
+    g.update(gait or {})
     if "base" in kinds:
         idle(ps, "Idle")
-        cycle(ps, "Walk", P=1.0, stance=0.6, a=0.3, lift=0.11, hip_base=0.045, bob=0.018, lean=0.04, arm_swing=0.32, elbow=0.22)
+        cycle(ps, "Walk", P=1.0, stance=g["stance"], a=g["a"], lift=g["lift"], hip_base=g["hip_base"], bob=g["bob"], lean=g["lean"],
+              arm_swing=g["arm_swing"], elbow=g["elbow"], v_ref=WALK_V, sway=g["sway"])
     if "run" in kinds:
-        cycle(ps, "Run", P=0.66, stance=0.36, a=0.4, lift=0.28, hip_base=0.07, bob=0.03, lean=0.22, arm_swing=0.7, elbow=1.25, run=True)
+        cycle(ps, "Run", P=0.66, stance=0.36, a=0.44, lift=0.28, hip_base=0.07, bob=0.03, lean=0.22, arm_swing=0.7, elbow=1.25, run=True, v_ref=RUN_V)
     if "sneak" in kinds:
         idle(ps, "SneakIdle", 3.0, sneak=True)
-        cycle(ps, "SneakWalk", P=1.3, stance=0.66, a=0.24, lift=0.1, hip_base=0.3, bob=0.012, lean=0.62, arm_swing=0.2, elbow=1.0, sneak=True)
+        cycle(ps, "SneakWalk", P=1.3, stance=0.66, a=0.4, lift=0.1, hip_base=0.3, bob=0.012, lean=0.62, arm_swing=0.2, elbow=1.0, sneak=True, v_ref=SNEAK_V)
     if "carry" in kinds:
         idle(ps, "CarryIdle", 3.0, carry=True)
-        cycle(ps, "CarryWalk", P=1.05, stance=0.6, a=0.27, lift=0.09, hip_base=0.045, bob=0.012, lean=0.0, arm_swing=0.2, elbow=0.25, carry=True)
+        cycle(ps, "CarryWalk", P=1.05, stance=0.6, a=0.34, lift=0.09, hip_base=0.045, bob=0.012, lean=0.0, arm_swing=0.2, elbow=0.25, carry=True, v_ref=WALK_V)
         serve(ps, "Serve")
     if "sit" in kinds:
         sit(ps, "Sit")
@@ -393,5 +413,5 @@ def build_all(rig, k, kinds):
         talk(ps, "Talk")
     if "lantern" in kinds:
         idle(ps, "LookAround", 6.0, lantern=True, look=True)
-        cycle(ps, "LanternWalk", P=1.1, stance=0.62, a=0.27, lift=0.09, hip_base=0.045, bob=0.015, lean=0.03, arm_swing=0.25, elbow=0.2, lantern=True)
+        cycle(ps, "LanternWalk", P=1.1, stance=0.62, a=0.34, lift=0.09, hip_base=0.045, bob=0.015, lean=0.03, arm_swing=0.25, elbow=0.2, lantern=True, v_ref=WALK_V)
     ps.reset()

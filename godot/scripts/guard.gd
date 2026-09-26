@@ -1,13 +1,17 @@
 extends "res://scripts/actor.gd"
-## A watchman on patrol with a lantern. He sees in a cone ahead of him, farther in
+## A watchman on patrol, usually with a lantern. He sees in a cone ahead of him, farther in
 ## lamplight, and hears footsteps. Seen long enough and you're caught.
+## watching = false keeps him walking his round without taking any notice (the car's steward
+## only minds you in the lounge, Arthur only when he looks up from his writing).
 
 signal caught
 signal spoke(line: String)
 
-const SIGHT := 13.0
-const FOV := deg_to_rad(58.0)          # half-angle
+const SIGHT := 14.0
+const FOV := deg_to_rad(62.0)          # half-angle
 const EYE := 1.6
+const LANTERN := 4.0                   # lantern brightness
+const LANTERN_REACH := 8.0             # how far a lantern lights you up for him
 
 var route: Array = []
 var route_i := 0
@@ -21,25 +25,28 @@ var lamps: Array = []                  # [Vector3 position, float reach] lamps t
 var lines_suspicious := ["Who's there?", "Somebody over there?"]
 var lines_clear := ["Rats in the freight again.", "Must be the wind."]
 var active := true
+var watching := true
+var patrol_speed := 1.1
+var pauses := {}                       # route index -> seconds he stops there (otherwise now and then)
 var _said := false
 var _search := 0.0
 
 
-func arm(route_points: Array, player_node: Node3D, lamp_list: Array) -> void:
+func arm(route_points: Array, player_node: Node3D, lamp_list: Array, with_lantern := true) -> void:
 	route = route_points
 	player = player_node
 	lamps = lamp_list
-	walk_anim = "LanternWalk"
-	idle_anim = "LookAround"
+	walk_anim = "LanternWalk" if with_lantern else "Walk"
+	idle_anim = "LookAround" if with_lantern else "Idle"
 	if not route.is_empty():
 		global_position = route[0]
 		route_i = 1 % route.size()
-	var hand := hand_node("R")
+	var hand := hand_node("R") if with_lantern else null
 	if hand:
 		lantern = OmniLight3D.new()
 		lantern.light_color = Color("ffb45a")
-		lantern.light_energy = 1.6
-		lantern.omni_range = 7.0
+		lantern.light_energy = LANTERN
+		lantern.omni_range = 9.0
 		lantern.omni_attenuation = 1.2
 		lantern.light_volumetric_fog_energy = 2.0
 		lantern.shadow_enabled = true
@@ -57,7 +64,7 @@ func light_at(p: Vector3) -> float:
 		best = maxf(best, clampf(1.0 - d / reach, 0.0, 1.0))
 	if lantern:
 		var d2 := (p - lantern.global_position).length()
-		best = maxf(best, clampf(1.0 - d2 / 6.0, 0.0, 1.0))
+		best = maxf(best, clampf(1.0 - d2 / LANTERN_REACH, 0.0, 1.0))
 	return best
 
 
@@ -68,7 +75,7 @@ func sees(p: Vector3, crouched: bool) -> float:
 	var to := target - eye
 	var dist := to.length()
 	var lit := light_at(p)
-	var reach := SIGHT * lerpf(0.45, 1.0, lit) * (0.6 if crouched else 1.0)
+	var reach := SIGHT * lerpf(0.47, 1.0, lit) * (0.62 if crouched else 1.0)
 	if dist > reach:
 		return 0.0
 	var fwd := Vector3(sin(model.rotation.y), 0.0, cos(model.rotation.y))
@@ -102,24 +109,24 @@ func hears(p: Vector3, noise: float) -> float:
 
 func _physics_process(delta: float) -> void:
 	if lantern:
-		lantern.light_energy = 1.6 * (0.93 + 0.07 * sin(Time.get_ticks_msec() * 0.011 + 1.3) * sin(Time.get_ticks_msec() * 0.0037))
+		lantern.light_energy = LANTERN * (0.93 + 0.07 * sin(Time.get_ticks_msec() * 0.011 + 1.3) * sin(Time.get_ticks_msec() * 0.0037))
 	if not active or player == null:
 		super._physics_process(delta)
 		return
 	var crouched: bool = player.get("sneaking") == true
 	var noise: float = float(player.get("noise"))
-	var s := sees(player.global_position, crouched)
-	var h := hears(player.global_position, noise)
+	var s := sees(player.global_position, crouched) if watching else 0.0
+	var h := hears(player.global_position, noise) if watching else 0.0
 	if s > 0.0 or h > 0.0:
 		last_seen = player.global_position
-		detection += (s * 0.95 + h * 0.5) * delta
+		detection += (s * 1.15 + h * 0.6) * delta
 	else:
-		detection -= 0.22 * delta
+		detection -= 0.18 * delta
 	detection = clampf(detection, 0.0, 1.0)
 
 	match state:
 		"patrol":
-			if detection > 0.35:
+			if detection > 0.3:
 				state = "suspicious"
 				_search = 3.5
 				path.clear()
@@ -155,9 +162,12 @@ func _patrol(delta: float) -> void:
 		play("LookAround")
 		return
 	var target: Vector3 = route[route_i]
+	var here := route_i
 	route_i = (route_i + 1) % route.size()
-	walk([target], 1.1, "LanternWalk")
-	if randf() < 0.45:
+	walk([target], patrol_speed, walk_anim)
+	if pauses.has(here):
+		wait_left = float(pauses[here])
+	elif pauses.is_empty() and randf() < 0.45:
 		wait_left = randf_range(2.0, 4.5)
 
 
@@ -175,10 +185,13 @@ func _resume() -> void:
 	route_i = best
 
 
-func reset_to(p: Vector3) -> void:
+func reset_to(p: Vector3, index := -1) -> void:
 	global_position = p
 	detection = 0.0
 	state = "patrol"
 	_said = false
 	path.clear()
 	wait_left = 0.0
+	if index >= 0 and not route.is_empty():
+		route_i = (index + 1) % route.size()
+	play(idle_anim)

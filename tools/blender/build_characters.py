@@ -101,43 +101,50 @@ CAST = {
                           face=dict(jaw=1.05, nose=1.0, brow=1.0, chin=1.05, age=0.2), coat="steward", coat_mat="white_jacket",
                           trousers="wool_black", shoes="shoe_black", bowtie="tie_black", vest=None, hat=None,
                           anims=("base", "run", "sneak", "carry")),
-    # The Senator: sixty-nine, heavy white mustache, silk hat, cane
-    "aldrich": dict(file="npc_aldrich", height=1.78, build=1.12, belly=0.6, skin="skin_ruddy", hair="hair_white", hair_style="short", bald=0.7,
+    # The Senator: sixty-nine, white hair, a heavy white mustache, silk hat. Short, careful steps.
+    "aldrich": dict(file="npc_aldrich", height=1.78, build=1.12, belly=0.6, skin="skin_ruddy", hair="hair_white", hair_style="short", bald=0.45,
                     face=dict(jaw=1.1, nose=1.15, nose_len=1.1, brow=1.3, chin=0.9, age=0.9, width=1.04), mustache=("walrus", 1.25),
                     mustache_mat="hair_white", brows="hair_white",
                     coat="overcoat", coat_mat="wool_black", trousers="wool_charcoal", shoes="shoe_black", tie="tie_black",
-                    vest="vest_gray", hat="top", hat_mat="silk_black", band="band_black", scarf="scarf_wine", anims=("base", "sit", "talk")),
-    # His private secretary: young, quick, carries the valise
-    "shelton": dict(file="npc_shelton", height=1.76, build=0.92, skin="skin_pale", hair="hair_sandy", hair_style="parted",
-                    face=dict(jaw=0.95, nose=0.95, brow=0.9, chin=1.0, age=0.05, width=0.97), coat="sack", coat_mat="wool_gray",
+                    vest="vest_gray", hat="top", hat_mat="silk_black", band="band_black", scarf="scarf_wine", anims=("base", "sit", "talk"),
+                    gait=dict(a=0.27, stance=0.64, lean=0.12, arm_swing=0.14, elbow=0.32, lift=0.07, bob=0.01, sway=0.05)),
+    # His private secretary: older, gray, carries the valise. Steady and a little stooped.
+    "shelton": dict(file="npc_shelton", height=1.75, build=0.95, skin="skin_pale", hair="hair_gray", hair_style="parted", bald=0.0,
+                    face=dict(jaw=0.95, nose=1.0, brow=1.0, chin=0.95, age=0.75, width=0.97), brows="hair_gray", coat="sack", coat_mat="wool_gray",
                     trousers="wool_gray", shoes="shoe_black", tie="tie_navy", vest=None, hat="bowler", hat_mat="felt_black",
-                    band="band_black", prop="valise", anims=("base", "sit", "talk")),
-    # Assistant Secretary of the Treasury, economist, thirty-seven
+                    band="band_black", prop="valise", anims=("base", "sit", "talk"),
+                    gait=dict(a=0.31, stance=0.62, lean=0.09, arm_swing=0.18, elbow=0.28, lift=0.08, bob=0.012)),
+    # Assistant Secretary of the Treasury, economist, thirty-seven. Quick, young steps.
     "andrew": dict(file="npc_andrew", height=1.75, build=1.02, skin="skin_fair", hair="hair_dark", hair_style="parted",
                    face=dict(jaw=1.0, nose=0.95, brow=1.0, chin=1.05, age=0.15, width=1.03), coat="overcoat", coat_mat="wool_navy",
                    trousers="wool_charcoal", shoes="shoe_black", tie="tie_green", vest="vest_gray", hat="homburg", hat_mat="felt_gray",
-                   band="band_black", scarf="scarf_cream", anims=("base", "sit", "talk")),
-    # Morgan partner; the one who talks to the newspapermen at Brunswick
-    "davison": dict(file="npc_davison", height=1.80, build=1.05, skin="skin_ruddy", hair="hair_brown", hair_style="short", bald=0.35,
+                   band="band_black", scarf="scarf_cream", anims=("base", "sit", "talk"),
+                   gait=dict(a=0.35, stance=0.59, lean=0.05, arm_swing=0.38, elbow=0.24, lift=0.12, bob=0.022)),
+    # Morgan partner, full dark hair; the one who talks to the newspapermen at Brunswick. A confident stride.
+    "davison": dict(file="npc_davison", height=1.80, build=1.05, skin="skin_ruddy", hair="hair_dark", hair_style="full", bald=0.0,
                     face=dict(jaw=1.15, nose=1.0, brow=1.05, chin=1.1, age=0.35), coat="overcoat", coat_mat="tweed_brown",
                     trousers="wool_brown", shoes="shoe_brown", tie="tie_red", vest="vest_buff", hat="bowler", hat_mat="felt_brown",
-                    band="band_black", prop="gun_case", anims=("base", "sit", "talk")),
-    # National City Bank; pince-nez and a neat mustache
-    "vanderlip": dict(file="npc_vanderlip", height=1.83, build=0.98, skin="skin_fair", hair="hair_gray", hair_style="parted",
-                      face=dict(jaw=1.0, nose=1.1, nose_len=1.1, brow=1.1, chin=1.0, age=0.45, width=0.98), mustache=("plain", 1.0),
-                      mustache_mat="hair_gray", glasses=True, coat="overcoat", coat_mat="wool_charcoal", trousers="wool_charcoal",
+                    band="band_black", prop="gun_case", anims=("base", "sit", "talk"),
+                    gait=dict(a=0.39, stance=0.6, lean=0.03, arm_swing=0.44, elbow=0.3, lift=0.12, bob=0.022)),
+    # National City Bank; white hair, round spectacles, clean shaven. Tall and upright, long easy steps.
+    "vanderlip": dict(file="npc_vanderlip", height=1.83, build=0.98, skin="skin_fair", hair="hair_white", hair_style="parted",
+                      face=dict(jaw=1.0, nose=1.1, nose_len=1.1, brow=1.1, chin=1.0, age=0.55, width=0.98),
+                      brows="hair_white", spectacles=True, coat="overcoat", coat_mat="wool_charcoal", trousers="wool_charcoal",
                       shoes="shoe_black", tie="tie_black", vest="vest_gray", hat="homburg", hat_mat="felt_black", band="band_black",
-                      prop="gun_case", anims=("base", "sit", "talk")),
-    # Kuhn, Loeb partner, born in Hamburg; dark mustache, slight
-    "warburg": dict(file="npc_warburg", height=1.72, build=0.95, skin="skin_olive", hair="hair_black", hair_style="parted", bald=0.2,
-                    face=dict(jaw=0.95, nose=1.12, nose_len=1.05, brow=1.1, chin=0.95, age=0.35, width=0.98), mustache=("plain", 1.1),
+                      prop="gun_case", anims=("base", "sit", "talk"),
+                      gait=dict(a=0.41, stance=0.61, lean=-0.01, arm_swing=0.26, elbow=0.18, lift=0.11, bob=0.02)),
+    # Kuhn, Loeb partner, born in Hamburg; bald crown, a full dark mustache, slight. Brisk, short steps.
+    "warburg": dict(file="npc_warburg", height=1.72, build=0.95, skin="skin_olive", hair="hair_black", hair_style="short", bald=0.8,
+                    face=dict(jaw=0.95, nose=1.12, nose_len=1.05, brow=1.1, chin=0.95, age=0.35, width=0.98), mustache=("walrus", 1.35),
                     mustache_mat="hair_black", coat="overcoat", coat_mat="wool_black", trousers="wool_black", shoes="shoe_black",
-                    tie="tie_navy", vest="vest_gray", hat="homburg", hat_mat="felt_black", band="band_black", scarf="scarf_gray", anims=("base", "sit", "talk")),
-    # Bankers Trust; thirty-eight, clean shaven, dark hair
+                    tie="tie_navy", vest="vest_gray", hat="homburg", hat_mat="felt_black", band="band_black", scarf="scarf_gray", anims=("base", "sit", "talk"),
+                    gait=dict(a=0.3, stance=0.6, lean=0.06, arm_swing=0.24, elbow=0.3, lift=0.1, bob=0.016)),
+    # Bankers Trust; thirty-eight, clean shaven, dark hair. Even and steady.
     "strong": dict(file="npc_strong", height=1.79, build=1.0, skin="skin_fair", hair="hair_dark", hair_style="parted",
                    face=dict(jaw=1.1, nose=1.0, brow=1.05, chin=1.1, age=0.15), coat="overcoat", coat_mat="wool_gray",
                    trousers="wool_gray", shoes="shoe_black", tie="tie_black", vest="vest_gray", hat="bowler", hat_mat="felt_black",
-                   band="band_black", prop="gun_case", anims=("base", "sit", "talk")),
+                   band="band_black", prop="gun_case", anims=("base", "sit", "talk"),
+                   gait=dict(a=0.37, stance=0.6, lean=0.04, arm_swing=0.32, elbow=0.22, lift=0.11, bob=0.018)),
     # the railroad's yard detective, walking the platform with a lantern
     "yardman": dict(file="npc_yardman", height=1.84, build=1.15, belly=0.5, skin="skin_ruddy", hair="hair_dark", hair_style="short",
                     face=dict(jaw=1.2, nose=1.1, brow=1.25, chin=1.15, age=0.5), mustache=("walrus", 1.0), mustache_mat="hair_dark",
@@ -148,6 +155,23 @@ CAST = {
                      face=dict(jaw=1.1, nose=1.05, brow=1.1, chin=1.05, age=0.3), mustache=("plain", 0.9), mustache_mat="hair_sandy",
                      coat="work", coat_mat="denim", trousers="denim", shoes="shoe_brown", tie=None, vest=None, hat="cap", hat_mat="wool_charcoal",
                      prop="lantern", gloves=True, anims=("base", "lantern")),
+    # the train's conductor: navy frock coat, brass buttons, a gray walrus mustache, his lamp
+    "conductor": dict(file="npc_conductor", height=1.77, build=1.1, belly=0.45, skin="skin_ruddy", hair="hair_gray", hair_style="short",
+                      face=dict(jaw=1.15, nose=1.1, brow=1.2, chin=1.0, age=0.7), mustache=("walrus", 1.1), mustache_mat="hair_gray",
+                      coat="frock", coat_mat="wool_navy", trousers="wool_navy", shoes="shoe_black", tie="tie_black", vest="vest_gray",
+                      buttons_mat="brass", hat="porter", hat_mat="wool_navy", band="brass", prop="lantern", anims=("base", "lantern"),
+                      gait=dict(a=0.32, stance=0.62, lean=0.05, arm_swing=0.2, lift=0.09, bob=0.014)),
+    # the freight yard's night watchman: an old army coat, a cap pulled low, a lantern
+    "watchman": dict(file="npc_watchman", height=1.74, build=1.0, skin="skin_fair", hair="hair_gray", hair_style="short",
+                     face=dict(jaw=1.05, nose=1.15, brow=1.2, chin=0.95, age=0.8, width=0.97), mustache=("plain", 1.0), mustache_mat="hair_gray",
+                     coat="overcoat", coat_mat="wool_gray", trousers="wool_charcoal", shoes="shoe_brown", tie=None, vest=None,
+                     hat="cap", hat_mat="wool_charcoal", scarf="scarf_gray", prop="lantern", gloves=True, anims=("base", "lantern"),
+                     gait=dict(a=0.3, stance=0.63, lean=0.08, arm_swing=0.16, lift=0.08, bob=0.012)),
+    # the Senator's own steward, back from the baggage car: white mess jacket, black tie
+    "steward": dict(file="npc_steward", height=1.79, build=0.98, skin="skin_brown", hair="hair_black", hair_style="short",
+                    face=dict(jaw=1.0, nose=1.05, brow=1.05, chin=1.05, age=0.45), mustache=("plain", 0.8), mustache_mat="hair_black",
+                    coat="steward", coat_mat="white_jacket", trousers="wool_black", shoes="shoe_black", bowtie="tie_black", vest=None,
+                    hat=None, anims=("base", "lantern"), gait=dict(a=0.34, stance=0.6, lean=0.02, arm_swing=0.22, lift=0.1, bob=0.016)),
     # the car's porter, in the company's dark uniform and cap
     "porter": dict(file="npc_porter", height=1.78, build=1.0, skin="skin_brown", hair="hair_black", hair_style="short",
                    face=dict(jaw=1.05, nose=1.05, brow=1.05, chin=1.0, age=0.4), mustache=("plain", 0.9), mustache_mat="hair_black",
@@ -258,6 +282,8 @@ def build(key):
         C.add_mustache(part, body, mats[spec.get("mustache_mat", spec.get("hair"))], kind, size)
     if spec.get("glasses"):
         C.add_glasses(part, body, mats["steel"])
+    if spec.get("spectacles"):
+        C.add_spectacles(part, body, mats["steel"], face.width)
     # hats and carried things are their own meshes, so indoor scenes can take them off
     hat_part = C.Part()
     prop_part = C.Part()
@@ -273,7 +299,7 @@ def build(key):
         hat_part.build(key.capitalize() + "Hat", coll, rig, smooth=True)
     if prop_part.faces:
         prop_part.build(key.capitalize() + "Prop", coll, rig, smooth=True)
-    anims.build_all(rig, body.k, set(spec.get("anims", ("base",))))
+    anims.build_all(rig, body.k, set(spec.get("anims", ("base",))), spec.get("gait"))
     sc.frame_start = 1
     sc.frame_end = 100
     sc.render.fps = anims.FPS

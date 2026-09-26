@@ -1,6 +1,7 @@
 extends CharacterBody3D
 ## Third-person player: WASD relative to the camera, mouse orbit, Shift to run, C to sneak.
-## Can change clothes (the steward's jacket on the train) and carry a tray.
+## Can change clothes (the steward's jacket on the train), carry a tray and hold up a pocket Kodak.
+## The tray and the camera follow the left hand but stay level, whatever the arm is doing.
 
 const WALK_SPEED := 2.3
 const RUN_SPEED := 6.0
@@ -30,6 +31,10 @@ var cam: Camera3D
 var model: Node3D
 var anim: AnimationPlayer
 var tray: Node3D
+var kodak: Node3D
+var holding_kodak := false
+var _skel: Skeleton3D
+var _hand := -1
 var current_anim := ""
 var one_shot := ""
 var last_safe := Vector3.ZERO
@@ -66,6 +71,8 @@ func _ready() -> void:
 	cam_pivot.rotation.y = yaw
 	spring.rotation.x = pitch
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	# after the animation has moved the hand this frame
+	process_priority = 10
 
 
 func _load_model(which: String) -> void:
@@ -74,7 +81,12 @@ func _load_model(which: String) -> void:
 		facing = model.rotation.y
 		remove_child(model)
 		model.queue_free()
+		if tray:
+			tray.queue_free()
 		tray = null
+		if kodak:
+			kodak.queue_free()
+		kodak = null
 	var packed: PackedScene = load(OUTFITS[which])
 	model = packed.instantiate()
 	add_child(model)
@@ -92,8 +104,16 @@ func _load_model(which: String) -> void:
 			anim.animation_finished.connect(_on_anim_finished)
 		_play("Idle")
 	outfit = which
+	_skel = null
+	_hand = -1
+	var found := model.find_children("*", "Skeleton3D", true, false)
+	if found.size() > 0:
+		_skel = found[0]
+		_hand = _skel.find_bone("Hand.L")
 	if carrying:
 		_attach_tray()
+	if holding_kodak:
+		set_kodak(true)
 
 
 func set_outfit(which: String) -> void:
@@ -111,20 +131,11 @@ func set_carrying(on: bool) -> void:
 
 
 func _attach_tray() -> void:
-	if tray != null:
+	if tray != null or _hand < 0:
 		return
-	var skel: Skeleton3D = null
-	var found := model.find_children("*", "Skeleton3D", true, false)
-	if found.size() > 0:
-		skel = found[0]
-	if skel == null:
-		return
-	var ba := BoneAttachment3D.new()
-	ba.bone_name = "Hand.L"
-	skel.add_child(ba)
 	tray = Node3D.new()
-	ba.add_child(tray)
-	tray.position = Vector3(0.0, 0.1, 0.0)
+	tray.top_level = true
+	add_child(tray)
 	# a silver tray with two glasses on it
 	var silver := StandardMaterial3D.new()
 	silver.albedo_color = Color("c8c4bc")
@@ -175,6 +186,66 @@ func _attach_tray() -> void:
 		d.material_override = drink
 		d.position = g.position + Vector3(0, -0.015, 0)
 		tray.add_child(d)
+
+
+func set_kodak(on: bool) -> void:
+	## the folding pocket Kodak, held at the waist and looked down into, the way they were
+	holding_kodak = on
+	if not on:
+		if kodak:
+			kodak.queue_free()
+		kodak = null
+		return
+	if kodak != null or _hand < 0:
+		return
+	kodak = Node3D.new()
+	kodak.top_level = true
+	add_child(kodak)
+	var leather := StandardMaterial3D.new()
+	leather.albedo_color = Color("1a1614")
+	leather.roughness = 0.55
+	var nickel := StandardMaterial3D.new()
+	nickel.albedo_color = Color("b8b4ac")
+	nickel.metallic = 1.0
+	nickel.roughness = 0.3
+	var body := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.09, 0.05, 0.16)
+	body.mesh = bm
+	body.material_override = leather
+	body.position = Vector3(0, 0.03, 0)
+	kodak.add_child(body)
+	# the bellows and lens standing out the front
+	var bel := MeshInstance3D.new()
+	var bb := BoxMesh.new()
+	bb.size = Vector3(0.07, 0.06, 0.07)
+	bel.mesh = bb
+	bel.material_override = leather
+	bel.position = Vector3(0, 0.03, 0.11)
+	kodak.add_child(bel)
+	var lens := MeshInstance3D.new()
+	var lm := CylinderMesh.new()
+	lm.top_radius = 0.018
+	lm.bottom_radius = 0.018
+	lm.height = 0.02
+	lens.mesh = lm
+	lens.material_override = nickel
+	lens.rotation.x = PI / 2.0
+	lens.position = Vector3(0, 0.03, 0.155)
+	kodak.add_child(lens)
+
+
+func _process(_delta: float) -> void:
+	# keep the tray and the camera level in the left hand
+	if _skel == null or _hand < 0 or (tray == null and kodak == null):
+		return
+	var hand := _skel.global_transform * _skel.get_bone_global_pose(_hand)
+	var palm := hand * Vector3(0.0, 0.08, 0.0)
+	var level := Basis(Vector3.UP, model.global_rotation.y)
+	if tray:
+		tray.global_transform = Transform3D(level, palm + Vector3(0.0, 0.035, 0.0))
+	if kodak:
+		kodak.global_transform = Transform3D(level, palm + Vector3(0.0, 0.02, 0.0))
 
 
 func play_once(anim_name: String) -> void:
@@ -265,7 +336,9 @@ func _physics_process(delta: float) -> void:
 	if one_shot != "":
 		return
 	var want := "Idle"
-	if carrying:
+	if holding_kodak:
+		want = "CarryIdle"
+	elif carrying:
 		want = "CarryWalk" if hspeed > 0.3 else "CarryIdle"
 	elif sneaking:
 		want = "SneakWalk" if hspeed > 0.2 else "SneakIdle"

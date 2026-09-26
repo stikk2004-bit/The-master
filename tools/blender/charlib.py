@@ -714,12 +714,9 @@ def head_center(body):
     return h0 + Vector((0, -0.01 * body.k, 0.1 * body.k))
 
 
-def add_head(part, body, face, skin_mat, eye_mat, brow_mat, lip_mat=None):
-    """A face pushed out of an egg: brow, sockets, cheekbones, nose, lips, jaw and chin."""
-    k = body.k
-    c = head_center(body)
-    rx, rf, rz = 0.077 * k * face.width, 0.097 * k, 0.112 * k
-    w = {"Head": 1.0}
+def head_deform(face, k):
+    """How far the skin sits out from the egg, by direction (right, forward, up). The head and the
+    hair both use it, so hair can lie right on the scalp."""
 
     def deform(d):
         # d: unit direction in (right, forward, up)
@@ -756,6 +753,16 @@ def add_head(part, body, face, skin_mat, eye_mat, brow_mat, lip_mat=None):
             off -= 0.004 * _g(abs(x), z, 0.75, 0.3, 0.12, 0.2) * k
         return off
 
+    return deform
+
+
+def add_head(part, body, face, skin_mat, eye_mat, brow_mat, lip_mat=None):
+    """A face pushed out of an egg: brow, sockets, cheekbones, nose, lips, jaw and chin."""
+    k = body.k
+    c = head_center(body)
+    rx, rf, rz = 0.077 * k * face.width, 0.097 * k, 0.112 * k
+    w = {"Head": 1.0}
+    deform = head_deform(face, k)
     part.blob(c, (rx, rf, rz), skin_mat, w, seg=36, rings=28, deform=deform)
     # eyes, set back in the sockets
     for sx in (1, -1):
@@ -772,48 +779,61 @@ def add_head(part, body, face, skin_mat, eye_mat, brow_mat, lip_mat=None):
 
 
 def add_hair(part, body, face, mat, style="short", bald=0.0, gray=False):
-    """Hair as a shell over the skull, cut to a hairline. bald thins the crown."""
+    """Hair as a shell lying on the scalp, cut to a hairline. Toward the edge it thins and tucks under
+    the skin, so the line reads as hair growing out, not the rim of a cap. bald clears the top of the
+    head, receding from the forehead and leaving a fringe over the ears and around the back."""
     k = body.k
     c = head_center(body)
-    rx, rf, rz = 0.077 * k * face.width + 0.006 * k, 0.097 * k + 0.006 * k, 0.112 * k + 0.007 * k
+    brx, brf, brz = 0.077 * k * face.width, 0.097 * k, 0.112 * k
+    skin = head_deform(face, k)
     w = {"Head": 1.0}
-    seg, rings = 36, 20
+    seg, rings = 72, 40
+    bald_dir = Vector((0.0, 0.35, 1.0)).normalized()
+    bald_cos = math.cos(0.25 + bald * 0.95)
+
+    def edge(dl):
+        """signed distance inside the hair (positive = covered), in head units"""
+        x, y, z = dl
+        front = max(y, 0.0)
+        wav = 0.02 * math.sin(math.atan2(x, y) * 9.0)   # a hairline is never a perfect curve
+        line = 0.55 - 0.25 * (1 - front) - 0.55 * max(-y, 0.0) + wav
+        if abs(x) > 0.75 and y > -0.3:
+            line = min(line, 0.18 + wav)  # above the ears
+        d = z - line
+        if bald > 0:
+            d = min(d, bald_cos - dl.dot(bald_dir) + 0.5 * wav)
+        return d
+
+    thick0 = (0.006 + (0.004 if style == "full" else 0.0)) * k
     rows = []
-    keep = []
     for j in range(rings + 1):
-        phi = math.pi * 0.62 * j / rings
+        phi = math.pi * 0.7 * j / rings
         row = []
         for i in range(seg + 1):
             th = 2 * math.pi * i / seg
             dl = Vector((math.sin(phi) * math.sin(th), math.sin(phi) * math.cos(th), math.cos(phi)))
-            vol = 0.004 * k if style == "full" else 0.0
-            if style == "parted":
-                vol += 0.004 * k * _g(dl.x, dl.z, -0.35, 0.8, 0.3, 0.3)
-            p = c + Vector((dl.x * (rx + vol), -dl.y * (rf + vol), dl.z * (rz + vol * 0.5)))
-            row.append((part.add_vert(p, (th * rx, phi * rz), w), dl))
+            e = edge(dl)
+            if e > 0:
+                thick = thick0
+                if style == "parted":
+                    thick += 0.004 * k * _g(dl.x, dl.z, -0.35, 0.8, 0.3, 0.3)
+                # combed: shallow grooves running front to back
+                comb = 1.0 + 0.14 * math.sin(dl.x * 40.0 + 1.5 * math.sin(dl.y * 4.0))
+                off = 0.0008 * k + thick * smoothstep(0.0, 0.14, e) * comb
+            else:
+                off = 0.0008 * k + 0.004 * k * max(e, -0.1) / 0.1  # tucked under the skin
+            off += skin(dl)
+            p = c + Vector((dl.x * (brx + off), -dl.y * (brf + off), dl.z * (brz + off)))
+            row.append((part.add_vert(p, (th * brx, phi * brz), w), e))
         rows.append(row)
-
-    def covered(dl):
-        x, y, z = dl
-        front = max(y, 0.0)
-        # hairline: high on the forehead, down over the temples, above the ears, low at the nape
-        line = 0.55 - 0.25 * (1 - front) - 0.55 * max(-y, 0.0)
-        if abs(x) > 0.75 and y > -0.3:
-            line = 0.18  # above the ears
-        if z < line:
-            return False
-        if bald > 0 and z > 0.9 - bald * 0.5 and y > -0.2:
-            return False
-        return True
-
     for j in range(rings):
         for i in range(seg):
             q = [rows[j][i], rows[j][i + 1], rows[j + 1][i + 1], rows[j + 1][i]]
-            if all(covered(dl) for _, dl in q):
+            if any(v[1] > 0.0 for v in q):
                 if j == 0:
                     part.faces.append(([q[0][0], q[2][0], q[3][0]], mat))
                 else:
-                    part.faces.append(([x[0] for x in q], mat))
+                    part.faces.append(([v[0] for v in q], mat))
 
 
 def add_mustache(part, body, mat, kind="plain", size=1.0):
@@ -823,13 +843,57 @@ def add_mustache(part, body, mat, kind="plain", size=1.0):
     if kind == "none":
         return
     base = c + Vector((0, -0.094 * k, -0.029 * k))
-    n = 7
+    n = 11
     for i in range(n):
         t = (i / (n - 1)) * 2 - 1  # -1..1 left to right
         droop = (0.012 if kind == "walrus" else 0.006) * abs(t) ** 1.6 * k * size
         p = base + Vector((t * 0.028 * k * size * (1.2 if kind == "walrus" else 1.0), 0.012 * k * abs(t) ** 2, -droop))
         r = (0.0085 if kind == "walrus" else 0.0055) * k * size * (1.0 - 0.45 * abs(t))
         part.blob(p, (r * 1.2, r, r * 0.9), mat, w, seg=8, rings=5)
+
+
+def tube(part, pts, r, mat, w, seg=6, closed=False, up=Vector((0, 0, 1))):
+    """A round wire through a list of points."""
+    n = len(pts)
+    rows = []
+    for i, p in enumerate(pts):
+        a = pts[(i - 1) % n] if (closed or i > 0) else p
+        b = pts[(i + 1) % n] if (closed or i < n - 1) else p
+        t = (b - a).normalized()
+        u = t.cross(up)
+        if u.length < 1e-6:
+            u = t.cross(Vector((1, 0, 0)))
+        u.normalize()
+        v = t.cross(u)
+        rows.append([part.add_vert(p + (u * math.cos(2 * math.pi * s / seg) + v * math.sin(2 * math.pi * s / seg)) * r,
+                                   (s * r, i * r), w) for s in range(seg)])
+    for i in range(n if closed else n - 1):
+        ra, rb = rows[i], rows[(i + 1) % n]
+        for s in range(seg):
+            part.faces.append(([ra[s], ra[(s + 1) % seg], rb[(s + 1) % seg], rb[s]], mat))
+
+
+def add_spectacles(part, body, mat, width=1.0):
+    """Round wire spectacles: two rims, a bridge, and arms back over the ears."""
+    k = body.k
+    c = head_center(body)
+    w = {"Head": 1.0}
+    R, wire = 0.0165 * k, 0.0014 * k
+    fy = -0.1 * k   # the rims sit just in front of the eyes
+
+    def P(x, y, z):
+        return c + Vector((x * k * width, y * k, z * k))
+    for sx in (1, -1):
+        cc = c + Vector((0.034 * k * sx * width, fy, 0.013 * k))
+        rim = [cc + Vector((math.cos(2 * math.pi * i / 24) * R, 0, math.sin(2 * math.pi * i / 24) * R * 0.9)) for i in range(24)]
+        tube(part, rim, wire, mat, w, closed=True, up=Vector((0, -1, 0)))
+        # the arm, hinged at the outer edge of the rim, then along the temple and over the ear
+        arm = [P(0.050 * sx, -0.100, 0.015), P(0.064 * sx, -0.096, 0.016), P(0.075 * sx, -0.064, 0.018),
+               P(0.083 * sx, -0.032, 0.022), P(0.086 * sx, -0.004, 0.030), P(0.084 * sx, 0.018, 0.028),
+               P(0.080 * sx, 0.030, 0.008)]
+        tube(part, arm, wire * 0.85, mat, w)
+    bridge = [P(0.0175 * s, -0.101 - 0.004 * (1 - abs(s)), 0.018 + 0.004 * (1 - s * s)) for s in (-1, -0.5, 0, 0.5, 1)]
+    tube(part, bridge, wire, mat, w)
 
 
 def add_glasses(part, body, mat):

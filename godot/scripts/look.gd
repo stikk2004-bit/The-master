@@ -185,6 +185,7 @@ const EMIT := {
 	"LampGlass": ["ff9a40", 0.22],
 	"LampFlame": ["ffa040", 5.0],
 	"GlassLit": ["ffb466", 0.6],
+	"DoorDusk": ["6a7a9a", 0.5],
 	"L_Bulb": ["ffcc80", 2.2],
 	"T_Gold": ["ffc070", 1.0],
 	"T_Amber": ["f09a30", 1.1],

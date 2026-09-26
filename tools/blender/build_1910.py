@@ -24,6 +24,8 @@ R = kit.rng_seed(1910)
 
 RAIL_TOP = 0.56
 FLOOR = 1.8          # car floor height above the ground
+STEP_RISE = 0.34     # car steps: tread tops at 1.46, 1.12, 0.78, 0.44
+DOOR_H = 2.05
 TRACK_A = -4.0
 TRACK_B = 4.0
 
@@ -254,6 +256,11 @@ def yard():
     tk.boxc((8.3, -15.3, 0.62 + 0.75), (0.7, 0.45, 0.3), m["barrel"], rz=0.25)
     tk.boxc((8.9, -16.4, 0.62 + 0.25), (0.6, 0.4, 0.5), m["crate_dark"], rz=-0.3)
     tk.obj("Trunks-col", coll)
+    # a porter's step box, left on the cinders under the front steps of the Senator's car
+    sb = MB()
+    sb.box((1.25, 8.15, 0.0), (1.62, 8.65, 0.2), m["wood"])
+    sb.box((1.23, 8.13, 0.2), (1.64, 8.67, 0.23), m["iron"])
+    sb.obj("StepBox-col", coll)
 
     # ---------------- the station building and its clock tower
     st = MB()
@@ -404,14 +411,34 @@ def yard():
     mark(coll, "MARK_step_bottom", (9.5, -28.4, 0.0))
     mark(coll, "MARK_step_top", (9.5, -21.6, 0.62))
     mark(coll, "MARK_rear_approach", (7.1, -13.9, 0.62))
-    mark(coll, "MARK_rear_board", (5.4, -12.8, 1.8))
-    mark(coll, "MARK_rear_door", (4.0, -12.1, 1.8))
     mark(coll, "MARK_porter", (7.2, -14.6, 0.62), -math.pi / 2)
-    mark(coll, "MARK_vestibule", (2.0, 8.6, 0.3))
+    # up the east steps of the observation platform and in at the rear door (tread tops: build_1910 side_steps)
+    rs_y = -12.45
+    for i, (xx, zz) in enumerate(((6.45, 0.62), (6.04, 0.78), (5.84, 1.12), (5.62, 1.46), (5.25, 1.8))):
+        mark(coll, "MARK_rear_step_%d" % i, (xx, rs_y, zz))
+    mark(coll, "MARK_rear_door", (4.05, -12.4, 1.8))
+    mark(coll, "MARK_rear_inside", (4.05, -11.55, 1.8))
+    # the player's way in: the step box, the four steps of the front vestibule, and in at its west door
+    mark(coll, "MARK_vestibule", (1.0, 8.4, 0.0))
+    for i, (xx, zz) in enumerate(((0.95, 0.0), (1.44, 0.22), (1.76, 0.44), (1.96, 0.78), (2.16, 1.12), (2.38, 1.46), (2.72, 1.8), (3.3, 1.8))):
+        mark(coll, "MARK_board_%d" % i, (xx, 8.4, zz))
+    mark(coll, "MARK_steps_marker", (2.0, 8.4, 2.7))
+    mark(coll, "MARK_cam_board", (-3.2, 5.2, 1.6))
+    mark(coll, "MARK_cam_board_look", (2.2, 8.5, 1.3))
+    mark(coll, "MARK_cam_rear", (8.6, -16.8, 2.6))
+    mark(coll, "MARK_cam_rear_look", (4.6, -12.3, 2.3))
+    # the yard detective walks the lane between the tracks
     for i, pt in enumerate(((-2.2, -23.0), (-2.2, -8.0), (-1.9, 6.0), (-2.2, 12.5), (-2.2, -2.0), (-2.4, -16.0))):
         mark(coll, "MARK_detective_%d" % i, (pt[0], pt[1], 0.3))
-    for i, pt in enumerate(((1.8, 44.0), (1.8, 30.0), (1.8, 16.0), (1.8, 2.0), (1.8, -6.0), (1.8, 10.0), (1.8, 26.0))):
+    # the brakeman walks the train, north to the engine and back, clear of the car steps
+    for i, pt in enumerate(((0.8, 44.0), (0.8, 30.0), (0.8, 16.0), (0.8, 2.0), (0.8, -6.0), (0.8, 10.0), (0.8, 26.0))):
         mark(coll, "MARK_brakeman_%d" % i, (pt[0], pt[1], 0.3))
+    # the night watchman keeps to the east edge of the crate lane, a few steps off the way through it
+    for i, pt in enumerate(((-5.9, -18.0), (-5.4, -8.0), (-5.4, -2.0), (-5.8, 6.0))):
+        mark(coll, "MARK_watchman_%d" % i, (pt[0], pt[1], 0.3))
+    # the conductor paces the ground south of the Senator's car
+    for i, pt in enumerate(((1.6, -14.8), (-0.6, -17.2), (1.8, -19.6), (3.2, -17.0))):
+        mark(coll, "MARK_conductor_%d" % i, (pt[0], pt[1], 0.3))
     kit.export(sc, "hoboken_yard")
     return sc
 
@@ -427,8 +454,28 @@ def truck(mb, m, x, y, wheel_r=0.46):
     mb.box((x - 1.25, y - 0.5, axle_z - 0.1), (x + 1.25, y + 0.5, axle_z + 0.1), m["t_iron"])
 
 
-def car(mb, m, y0, y1, paint, windows, x=TRACK_B, observation=False, name_lights=None, coll=None, tag="car"):
-    """A passenger car body from y0 (south) to y1 (north)."""
+def side_steps(mb, m, x, side, ya, yb, n, hw=1.5):
+    """Car steps down one side: n iron treads, each a riser lower and a little farther out than the one above."""
+    for s in range(n):
+        top = FLOOR - STEP_RISE * (s + 1)
+        d_out = 0.24 + 0.2 * s
+        xo, xi = x + side * (hw + d_out), x + side * (hw + d_out - 0.32)
+        mb.box((min(xo, xi), ya, top - 0.05), (max(xo, xi), yb, top), m["t_iron"])
+    bottom = FLOOR - STEP_RISE * n - 0.05
+    for yy in (ya + 0.02, yb - 0.02):
+        mb.rod((x + side * (hw - 0.02), yy, FLOOR - 0.05), (x + side * (hw + 0.24 + 0.2 * (n - 1)), yy, bottom), 0.02, m["t_iron"])
+
+
+def vestibule_door(mb, m, xo, side, ya, yb):
+    """A closed vestibule door: black, with a dark glass light in its upper half."""
+    xs = (min(xo, xo - side * 0.05), max(xo, xo - side * 0.05))
+    mb.box((xs[0], ya, FLOOR), (xs[1], yb, FLOOR + DOOR_H), m["black"])
+    mb.box((xs[0] - 0.005, ya + 0.12, FLOOR + 1.1), (xs[1] + 0.005, yb - 0.12, FLOOR + 1.85), m["t_glass"])
+
+
+def car(mb, m, y0, y1, paint, windows, x=TRACK_B, observation=False, name_lights=None, coll=None, tag="car", door_west=False):
+    """A passenger car body from y0 (south) to y1 (north). door_west leaves the front vestibule's west door
+    out of the mesh so the game can swing it (see swing_doors)."""
     hw = 1.5
     z0, z1 = FLOOR, FLOOR + 2.55
     vest = 1.1
@@ -469,19 +516,29 @@ def car(mb, m, y0, y1, paint, windows, x=TRACK_B, observation=False, name_lights
             mb.boxc((x + side * (hw + 0.02), y, z0 + 1.03), (0.03, w + 0.12, 0.05), m["black"])
         y += 1.35 if not observation else (1.7 if y < body_y0 + 5.5 else 1.35)
         k += 1
-    # vestibules: a hood over the step, a door each side, steps down to the rail
+    # vestibules: hollow, a door each side, real steps down to the ground
     ends = [(body_y1, y1)] + ([] if observation else [(y0, body_y0)])
     for a, b in ends:
-        mb.box((x - hw + 0.05, a, z0), (x + hw - 0.05, b, z1), m["black"])
+        vx0, vx1 = x - hw + 0.05, x + hw - 0.05
+        mb.box((vx0, a, z0 - 0.06), (vx1, b, z0), m["t_iron"])                    # floor
+        mb.box((vx0, a, z1 - 0.12), (vx1, b, z1), m["black"])                      # ceiling
         mb.box((x - hw - 0.05, a, z1 - 0.05), (x + hw + 0.05, b, z1 + 0.25), m["roof"])
         for side in (-1, 1):
-            mb.box((x + side * hw - 0.02, a + 0.1, z0 + 0.1), (x + side * (hw + 0.01), b - 0.1, z1 - 0.2), m["t_glass"])
-            for s in range(3):
-                zz = z0 - 0.35 * (s + 1)
-                xx = x + side * (hw - 0.1 - s * 0.05)
-                mb.box((min(xx, xx + side * 0.35), a + 0.15, zz), (max(xx, xx + side * 0.35), b - 0.15, zz + 0.06), m["t_iron"])
+            xo = x + side * hw
+            xs = (min(xo, xo - side * 0.06), max(xo, xo - side * 0.06))
+            # posts either side of the door, and the header over it
+            mb.box((xs[0], a, z0), (xs[1], a + 0.12, z1 - 0.12), m["black"])
+            mb.box((xs[0], b - 0.12, z0), (xs[1], b, z1 - 0.12), m["black"])
+            mb.box((xs[0], a + 0.12, z0 + DOOR_H), (xs[1], b - 0.12, z1 - 0.12), m["black"])
+            if not (door_west and side < 0 and b == y1):
+                vestibule_door(mb, m, xo, side, a + 0.12, b - 0.12)
+            side_steps(mb, m, x, side, a + 0.15, b - 0.15, 3 if side > 0 else 4, hw)
+        # the far end: panels either side of the diaphragm
+        yy = b if b == y1 else a
+        yw = (yy - 0.05, yy) if b == y1 else (yy, yy + 0.05)
+        mb.box((vx0, yw[0], z0), (x - 1.0, yw[1], z1 - 0.12), m["black"])
+        mb.box((x + 1.0, yw[0], z0), (vx1, yw[1], z1 - 0.12), m["black"])
         # diaphragm (the canvas bellows between cars)
-        yy = b if b > a and b == y1 else a
         mb.box((x - 1.0, yy - 0.15, z0), (x + 1.0, yy + 0.15, z1 - 0.1), m["black"])
     if observation:
         # the open platform at the rear, brass rails all round, red marker lamps
@@ -496,18 +553,17 @@ def car(mb, m, y0, y1, paint, windows, x=TRACK_B, observation=False, name_lights
         mb.rod((x - hw, py0 + 0.05, z0 + 1.03), (x + hw, py0 + 0.05, z0 + 1.03), 0.03, m["t_brass"])
         for side in (-1, 1):
             mb.rod((x + side * (hw - 0.05), py0 + 0.05, z0 + 1.03), (x + side * (hw - 0.05), py0 + 0.45, z0 + 1.03), 0.03, m["t_brass"])
-            for s in range(3):
-                zz = z0 - 0.35 * (s + 1)
-                xx = x + side * (hw - 0.1 - s * 0.05)
-                mb.box((min(xx, xx + side * 0.35), py0 + 0.5, zz), (max(xx, xx + side * 0.35), py1 - 0.1, zz + 0.06), m["t_iron"])
+            side_steps(mb, m, x, side, py0 + 0.5, py1 - 0.1, 3 if side > 0 else 4, hw)
         # awning over the platform
         mb.box((x - hw - 0.05, py0 - 0.1, z1 - 0.05), (x + hw + 0.05, py1, z1 + 0.1), m["roof"])
         for side in (-1, 1):
             mb.rod((x + side * (hw - 0.05), py0 + 0.05, z0 + 1.03), (x + side * (hw - 0.05), py0 + 0.05, z1 - 0.05), 0.02, m["t_brass"])
             mb.boxc((x + side * (hw - 0.02), py0 - 0.02, z0 + 1.3), (0.16, 0.16, 0.22), m["red_lamp"])
-        # rear door with its blind down
-        mb.boxc((x, y0 - 0.02, z0 + 1.1), (0.8, 0.04, 2.0), m["maroon"])
-        mb.boxc((x, y0 - 0.045, z0 + 1.45), (0.55, 0.02, 0.8), m["blinds"])
+        # the rear doorway, lit from inside; the door itself is its own object (it opens)
+        mb.quad([(x - 0.4, y0 - 0.004, z0), (x + 0.4, y0 - 0.004, z0), (x + 0.4, y0 - 0.004, z0 + DOOR_H), (x - 0.4, y0 - 0.004, z0 + DOOR_H)], m["window_lit"])
+        mb.box((x - 0.5, y0 - 0.06, z0), (x - 0.4, y0, z0 + DOOR_H + 0.1), m["maroon"])
+        mb.box((x + 0.4, y0 - 0.06, z0), (x + 0.5, y0, z0 + DOOR_H + 0.1), m["maroon"])
+        mb.box((x - 0.5, y0 - 0.06, z0 + DOOR_H), (x + 0.5, y0, z0 + DOOR_H + 0.1), m["maroon"])
         if coll is not None:
             for side in (-1, 1):
                 light(coll, "red", 0 if side < 0 else 1, (x + side * (hw - 0.02), py0 - 0.3, z0 + 1.3))
@@ -584,13 +640,31 @@ def boxcar(mb, m, y0, y1, x=TRACK_A):
             mb.box((x + side * 1.37 - 0.01, yy - 0.03, 1.4), (x + side * 1.37 + 0.01, yy + 0.03, 4.05), m["crate_dark"])
 
 
+def swing_doors(coll, m, x, y0, y1, hw=1.5):
+    """The two doors of the Senator's car that the game swings open: the rear door onto the observation
+    platform (it swings out, hinged on its west edge) and the west door of the front vestibule (it swings
+    in, hinged on its north edge). Each object's origin is its hinge, so turning it about Z opens it."""
+    rd = MB()
+    rd.box((0.0, -0.035, 0.0), (0.8, 0.0, DOOR_H), m["maroon"])
+    rd.box((0.12, -0.05, 0.95), (0.68, -0.035, 1.8), m["blinds"])
+    rd.sphere((0.7, -0.075, 1.0), 0.03, m["t_brass"], sub=1)
+    rd.obj("RearDoor", coll, loc=(x - 0.4, y0 - 0.008, FLOOR))
+    fd = MB()
+    wdt = 1.1 - 0.24
+    fd.box((0.0, -wdt, 0.0), (0.05, 0.0, DOOR_H), m["black"])
+    fd.box((-0.005, -wdt + 0.12, 1.1), (0.055, -0.12, 1.85), m["t_glass"])
+    fd.sphere((-0.035, -wdt + 0.1, 1.0), 0.03, m["t_brass"], sub=1)
+    fd.obj("FrontDoor", coll, loc=(x - hw, y1 - 0.12, FLOOR))
+
+
 def train():
     sc = kit.new_scene("Hoboken_Train")
     coll = sc.collection
     m = M()
     pc = MB()
-    car(pc, m, -12.0, 9.0, m["maroon"], m["blinds"], observation=True, coll=coll)
+    car(pc, m, -12.0, 9.0, m["maroon"], m["blinds"], observation=True, coll=coll, door_west=True)
     pc.obj("PrivateCar-col", coll)
+    swing_doors(coll, m, TRACK_B, -12.0, 9.0)
     c1 = MB()
     car(c1, m, 9.3, 30.3, m["green"], m["coach_win"])
     c1.obj("Coach1-col", coll)
@@ -897,6 +971,15 @@ def private_car():
     mark(coll, "MARK_cam_peek_look", (-0.1, 3.0, 1.1))
     mark(coll, "MARK_jacket", (1.0, -6.05, 0.0))
     mark(coll, "MARK_tray", (-0.75, -6.6, 0.0))
+    # Arthur's valise on the lounge desk, and where you stand to get the papers under the lamp
+    mark(coll, "MARK_valise", (1.25, 8.9, 0.0))
+    mark(coll, "MARK_desk_stand", (0.62, 8.85, 0.0), -math.pi / 2)
+    mark(coll, "MARK_pc_reset", (0.0, -7.9, 0.0), 0.0)
+    # the real steward's round: galley, up the corridor, through the dining room to the lounge and back
+    for i, pt in enumerate(((0.0, -8.4), (1.0, -5.0), (1.08, 0.3), (1.25, 4.5), (0.55, 5.6), (0.55, 7.7))):
+        mark(coll, "MARK_stew_%d" % i, (pt[0], pt[1], 0.0))
+    mark(coll, "MARK_cam_lounge", (-0.9, 5.4, 1.9))
+    mark(coll, "MARK_cam_lounge_look", (1.0, 8.6, 0.9))
     kit.export(sc, "private_car")
 
 
@@ -1048,7 +1131,16 @@ def meeting_room():
     mark(coll, "MARK_mt_spawn", (-3.5, -2.9, 0.0), 0.0)
     mark(coll, "MARK_cam_table", (3.9, -2.8, 2.3))
     mark(coll, "MARK_cam_table_look", (-1.2, 0.3, 1.0))
-    mark(coll, "MARK_draft", (0.7, -1.7, 0.2))
+    mark(coll, "MARK_draft", (1.4, -0.36, 0.8))
+    # what's worth a photograph once the room empties out
+    mark(coll, "MARK_chalk_spot", (-4.6, 0.0, 0.0), math.pi / 2)
+    mark(coll, "MARK_notes_paul", (-1.4, 0.36, 0.8))
+    mark(coll, "MARK_notes_abe", (-1.4, -0.36, 0.8))
+    mark(coll, "MARK_arthur_window", (4.75, -0.2, 0.0), -math.pi / 2)
+    mark(coll, "MARK_mt_door", (-3.5, -3.25, 0.0))
+    mark(coll, "MARK_mt_out", (-3.5, -4.8, 0.0))
+    mark(coll, "MARK_cam_door", (-1.2, -2.6, 2.0))
+    mark(coll, "MARK_cam_door_look", (-3.6, -3.4, 1.2))
     kit.export(sc, "meeting_room")
 
 

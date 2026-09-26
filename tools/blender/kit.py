@@ -256,8 +256,25 @@ def new_scene(name):
     return sc
 
 
+def relink_images():
+    """Pictures saved with the owner's Windows paths (C:/Users/.../JekyllClubGame/...) are pointed at the same
+    files in this checkout, then every picture path is stored relative to the .blend, so it opens anywhere."""
+    for im in bpy.data.images:
+        if im.source != "FILE" or im.packed_file:
+            continue
+        p = im.filepath.replace("\\", "/")
+        if "/JekyllClubGame/" in p and not os.path.exists(bpy.path.abspath(im.filepath)):
+            local = os.path.join(ROOT, *p.split("/JekyllClubGame/", 1)[1].split("/"))
+            if os.path.exists(local):
+                im.filepath = local
+                im.reload()
+    bpy.ops.file.make_paths_relative()
+
+
 def export(sc, fname, images=True):
     """images=False leaves pictures out of the file; the game lays them on by material name (look.gd IMG)."""
+    if images:
+        relink_images()
     for w in bpy.context.window_manager.windows:
         w.scene = sc
     for d in (EXPORTS, MODELS):

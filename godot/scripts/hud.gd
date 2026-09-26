@@ -42,6 +42,7 @@ var sub_box: VBoxContainer
 var sub_name: Label
 var sub_line: Label
 var objective: Label
+var timer_label: Label
 var card: VBoxContainer
 var card_title: Label
 var card_sub: Label
@@ -245,6 +246,20 @@ func set_objective(text: String) -> void:
 
 func _set_objective_text(text: String) -> void:
 	objective.text = "◆  " + text
+
+
+func set_timer(text: String, urgent := false) -> void:
+	## a second line under the objective: a countdown, a tally of photographs
+	if timer_label == null:
+		timer_label = _label("", 19, Color(BONE, 0.85), serif_italic)
+		_shadow(timer_label)
+		timer_label.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		timer_label.offset_left = 64
+		timer_label.offset_top = 64
+		root.add_child(timer_label)
+	timer_label.text = text
+	timer_label.visible = text != ""
+	timer_label.add_theme_color_override("font_color", Color("e0a070") if urgent else Color(BONE, 0.85))
 
 
 # ------------------------------------------------------------------ subtitles

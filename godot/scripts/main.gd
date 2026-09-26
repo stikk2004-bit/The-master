@@ -403,8 +403,38 @@ func _take_ticket() -> void:
 
 
 func _enter_lobby() -> void:
-	go_to("lobby", SPAWN_LOBBY, 0.0)
+	await _through_door("Door_Front", "lobby", SPAWN_LOBBY, 0.0)
 	hud.show_location("The Grand Lobby", "The Jekyll Island Club")
+
+
+func swing_door(door: String, open := true, seconds := 0.7) -> bool:
+	## Turn a door's leaves on their hinges. The leaves are Blender objects named <door>_SwingP / _SwingN
+	## (tools/blender/split_doors.py); P turns them one way about their hinge, N the other.
+	if level == null:
+		return false
+	var leaves := level.find_children(door + "_Swing*", "Node3D", true, false)
+	if leaves.is_empty():
+		return false
+	var tw := create_tween().set_parallel(true)
+	for n in leaves:
+		var nd := n as Node3D
+		var sgn := 1.0 if String(nd.name).contains("SwingP") else -1.0
+		tw.tween_property(nd, "rotation:y", sgn * 1.4 if open else 0.0, seconds).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	Sound.one_shot(self, "door", -8.0)
+	return true
+
+
+func _through_door(door: String, level_name: String, pos: Vector3, facing: float) -> void:
+	## open the door, then go through it
+	if busy:
+		return
+	if swing_door(door):
+		busy = true
+		player.enabled = false
+		hud.set_prompt("")
+		await get_tree().create_timer(0.5).timeout
+		busy = false
+	go_to(level_name, pos, facing)
 
 
 func _add_fireflies() -> void:
@@ -474,27 +504,27 @@ func _build_lobby() -> void:
 
 
 func _exit_to_porch() -> void:
-	go_to("exterior", SPAWN_PORCH, PI)
+	await _through_door("Door_Exit", "exterior", SPAWN_PORCH, PI)
 	hud.show_location("The Grounds", "Dusk, Picayune, Mississippi")
 
 
 func _enter_library() -> void:
-	go_to("library", SPAWN_LIBRARY, 0.0)
+	await _through_door("Door_Library", "library", SPAWN_LIBRARY, 0.0)
 	hud.show_location("The Library", "The four studies")
 
 
 func _door_trading() -> void:
-	go_to("trading", Vector3.INF, 0.0)
+	await _through_door("Door_Trading", "trading", Vector3.INF, 0.0)
 	hud.show_location("The Trading Floor", "Jekyll Island Trading")
 
 
 func _door_studio() -> void:
-	go_to("studio", Vector3.INF, 0.0)
+	await _through_door("Door_Studio", "studio", Vector3.INF, 0.0)
 	hud.show_location("The Drafting Room", "Jekyll Studio")
 
 
 func _door_honey() -> void:
-	go_to("honey", Vector3.INF, 0.0)
+	await _through_door("Door_Honey", "honey", Vector3.INF, 0.0)
 	hud.show_location("The Honey House", "Jekyll's 40 Acre Farm")
 
 
@@ -635,6 +665,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			chapter.request_advance()
 			get_viewport().set_input_as_handled()
 		return
+	# a conversation outside a cutscene (pouring the coffee): E moves it along too
+	if chapter.talking and busy and event.is_action_pressed("interact"):
+		chapter.request_advance()
+		get_viewport().set_input_as_handled()
+		return
 	if sim != null:
 		if event.is_action_pressed("ui_cancel"):
 			sim.close_machine()
@@ -681,7 +716,7 @@ func _build_library() -> void:
 
 
 func _exit_library() -> void:
-	go_to("lobby", LOBBY_FROM_LIBRARY, -PI / 2.0)
+	_through_door("Door_Exit_001", "lobby", LOBBY_FROM_LIBRARY, -PI / 2.0)
 
 
 func _toggle_kids() -> void:
@@ -955,6 +990,7 @@ func _open_envelope() -> void:
 
 # ---------- screenshots for development ----------
 # godot --path godot -- --shot level=lobby pos=0,1.6,-3 look=0,1.4,-10 out=/tmp/lobby.png [frames=90]
+#   swing=Door_Library opens a door first; setup=rear|front|valise|room stages a chapter moment (chapter1910 shot_setup)
 func _parse_shot_args() -> void:
 	var args := OS.get_cmdline_user_args()
 	if not args.has("--shot"):
@@ -983,8 +1019,18 @@ func _run_shot() -> void:
 		cam.global_position = _vec(String(shot["pos"]))
 		cam.look_at(_vec(String(shot.get("look", "0,1,0"))))
 		cam.current = true
+		if shot.has("flash"):
+			# a work light at the camera, for looking at shapes in the dark
+			var wl := OmniLight3D.new()
+			wl.omni_range = 30.0
+			wl.light_energy = float(shot["flash"])
+			cam.add_child(wl)
 	player.enabled = false
 	hud.visible_title(false)
+	if shot.has("swing"):
+		swing_door(String(shot["swing"]), true, 0.05)
+	if shot.has("setup"):
+		chapter.shot_setup(String(shot["setup"]))
 	if shot.has("debug"):
 		for k in chapter.marks.keys():
 			print("MARK ", k, " ", (chapter.marks[k] as Transform3D).origin)
