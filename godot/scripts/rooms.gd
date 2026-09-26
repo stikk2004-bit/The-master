@@ -55,6 +55,7 @@ func build_honey() -> void:
 	RenderingServer.global_shader_parameter_set("ground_y", 0.0)
 	var root := _load("res://models/honey_house.glb")
 	main._safety_floor()
+	main._dust(Vector3(0.0, 1.8, 0.0), Vector3(4.8, 1.4, 3.8), 260)
 	main._ambience("crickets")
 	_lid = root.find_child("HiveLid", true, false) as Node3D
 	_frame = root.find_child("HiveFrame", true, false) as Node3D
@@ -174,6 +175,7 @@ func build_studio() -> void:
 	RenderingServer.global_shader_parameter_set("ground_y", 0.0)
 	_load("res://models/drafting_room.glb")
 	main._safety_floor()
+	main._dust(Vector3(0.0, 1.8, 0.0), Vector3(4.8, 1.6, 3.8), 200)
 	main._ambience("room")
 	main.add_interactable(mk("dr_spawn") + Vector3(0, 1.0, 0.6), 1.3, "Back to the lobby", main._exit_room.bind(LOBBY_FROM_STUDIO, PI / 2.0))
 	for key in SITES.keys():
@@ -227,6 +229,7 @@ func build_trading() -> void:
 	RenderingServer.global_shader_parameter_set("ground_y", 0.0)
 	_load("res://models/trading_floor.glb")
 	main._safety_floor()
+	main._dust(Vector3(0.0, 1.7, 0.0), Vector3(5.2, 1.5, 4.2), 200)
 	main._ambience("room")
 	checkin = {}
 	main.add_interactable(mk("tf_spawn") + Vector3(0, 1.0, 0.6), 1.3, "Back to the lobby", main._exit_room.bind(LOBBY_FROM_TRADING, -PI / 2.0))
@@ -304,3 +307,40 @@ func _screens() -> void:
 		"Each screen shows the same four lines. Members fill them in every day, win or lose:\n\n"
 		+ "[b]What I planned.[/b]\n[b]What I actually did.[/b]\n[b]How I felt while I did it.[/b]\n[b]What I learned about myself.[/b]\n\n"
 		+ "One line a day, every day. Over a few months it tells you more about how you trade than anything anybody could sell you.")
+
+
+## godot --headless --path godot -- --roomtest
+## Walks into each room and uses everything in it (skipping the web links).
+func roomtest() -> void:
+	for pair in [["_door_honey", "honey"], ["_door_studio", "studio"], ["_door_trading", "trading"]]:
+		main.call(String(pair[0]))
+		var t := 0.0
+		while (main.level == null or String(main.level.name) != String(pair[1]) or main.busy) and t < 20.0:
+			await get_tree().process_frame
+			t += get_process_delta_time()
+		await get_tree().create_timer(0.5).timeout
+		print("ROOMTEST in ", pair[1], " with ", main.interactables.size(), " things to use")
+		for it in main.interactables.duplicate():
+			var prompt := String(it["prompt"])
+			if prompt.begins_with("Back to"):
+				continue
+			var cb: Callable = it["cb"]
+			cb.call()
+			var wait := 0.0
+			while not hud.panel.visible and wait < 5.0:
+				await get_tree().process_frame
+				wait += get_process_delta_time()
+			print("  used: ", prompt, "  panel open: ", hud.panel.visible)
+			if hud.panel.visible:
+				if String(pair[1]) == "trading" and prompt.begins_with("Pre-market"):
+					on_link("checkin:sleep:good")
+					on_link("checkin:focus:ok")
+					on_link("checkin:mood:calm")
+					print("  check-in answered good / okay / calm, verdict Ready: ", hud.panel_body.text.contains("Ready."))
+					on_link("checkin:mood:tilted")
+					print("  changed mood to angry, verdict Sit out: ", hud.panel_body.text.contains("Sit out."))
+				hud.close_panel()
+				for k in 60:
+					await get_tree().process_frame
+	print("ROOMTEST done")
+	get_tree().quit()

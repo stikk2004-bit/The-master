@@ -4,24 +4,52 @@ A personal 3D game: walk the clubhouse of The Jekyll Island Club (Picayune, Miss
 go room to room, and use what's in each room. Built in Blender, played in Godot 4.7.
 Owner: founder of The Jekyll Island Club. Club email jekyllsclub@gmail.com. Site jekyllsclub.com.
 
+The look is Skyrim / Dark Souls 1 art style (the setting stays 1880s-1910 Mississippi and Georgia):
+worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained color.
+
 ## Folder layout
 - `blender/JekyllClubGame.blend`: every model. Scenes: Clubhouse_Exterior, Lobby, Library,
-  Player_Character, NPC_Hooded (and "Scene", an unrelated Picayune town test; leave it alone).
-  Text block `club_lib.py` inside the .blend has the modeling helpers (MB mesh builder, mat,
-  picture, framed, img_mat, text_obj). Load it with `exec(bpy.data.texts["club_lib.py"].as_string())`.
+  Player_Character, Player_Waiter, NPC_Hooded, NPC_Aldrich / Shelton / Andrew / Davison / Vanderlip /
+  Warburg / Strong / Yardman / Brakeman / Porter, Hoboken_Yard, Hoboken_Train, Hoboken_Boxcars,
+  Motorcar_1910, Private_Car, Jekyll_Meeting, Honey_House, Drafting_Room, Trading_Floor
+  (and "Scene", an unrelated Picayune town test; leave it alone).
+  Text block `club_lib.py` inside the .blend has the old modeling helpers.
+  The owner's file was last saved by Blender 5.2; the build scripts run on the `bpy` 5.0 module and
+  save it back. Nothing in it needs 5.2 features.
+- `tools/`: everything that makes the art. All of it can be re-run.
+  - `texgen.py`: paints the tileable PBR textures and foliage cards into godot/textures/ (numpy, no downloads).
+  - `paint_1910.py`, `paint_rooms.py`: painted pictures (blinds, skyline, chalkboards, plaque, ticker, screens...).
+  - `sounds.py`: synthesized ambience into godot/sounds/ (yard, train, fire, marsh, crickets, room, whistle).
+  - `fonts/`: .woff copies of the OFL fonts for painting text.
+  - `blender/kit.py`: the modeling kit (MB mesh builder, mat, img_mat, text_mesh, new_scene, export).
+  - `blender/charlib.py`, `anims.py`, `build_characters.py`: the characters and their animations.
+  - `blender/build_1910.py`: Hoboken yard, train, motor cab, the private car, the Jekyll meeting room.
+  - `blender/build_rooms.py`: the Honey House, the Drafting Room, the Trading Floor.
+  Run with `python tools/blender/build_characters.py [names]` using the bpy module (pip install bpy)
+  or `blender -b blender/JekyllClubGame.blend -P tools/blender/<script>.py -- <names>`.
 - `exports/`: .glb copies of every model.
 - `art/source/`: the owner's original artwork (from the website zip, plus the club seal).
   `art/textures/`: game-ready versions (seal_main.jpg is the seal over the front desk).
 - `godot/`: the Godot project. Open project.godot. F5 to play.
-  - `models/*.glb`: what the game loads (copy exports here).
-  - `scripts/main.gd`: rooms, lighting, interactables, lessons UI, bank ledger, guest book, NPC hookup.
-  - `scripts/player.gd`: third-person controller (WASD, mouse orbit, Shift run, Space jump, R unstuck, step-up).
-  - `scripts/hud.gd`: title card, E prompt, reading panel with [url] links, guest book, toast, chime.
+  - `models/*.glb`: what the game loads. `textures/`, `shaders/`, `fonts/`, `sounds/`: the look.
+  - `scripts/main.gd`: levels, the present-day rooms (exterior, lobby, library), lessons UI, bank ledger,
+    guest book, NPC hookup, dust, ambience, settings, screenshots and test switches.
+  - `scripts/rooms.gd`: the Honey House, the Drafting Room and the Trading Floor.
+  - `scripts/chapter1910.gd`: the 1910 chapter (Hoboken, the private car, Jekyll Island, the meeting room).
+  - `scripts/look.gd`: textured materials by Blender material name (MATS, EMIT, IMG tables),
+    lighting presets, color grading, graphics quality.
+  - `scripts/foliage.gd`: leaf, needle, palmetto, moss and grass cards scattered over canopies and lawns.
+  - `scripts/markers.gd`: Blender LIGHT_ and MARK_ empties become lights and named positions.
+  - `scripts/actor.gd`, `scripts/guard.gd`: scripted people; watchmen with sight, hearing, lanterns.
+  - `scripts/player.gd`: third-person controller (WASD, mouse orbit, Shift run, C sneak, Space jump,
+    R unstuck, step-up), outfits (club, waiter), carrying a tray, noise level for guards.
+  - `scripts/hud.gd`: title, prompt bar, reading panel with [url] links, guest book, toast, chime,
+    location banners, subtitles (say), letterbox, chapter cards, objective line, sneak eye (sneak_eye.gd).
   - `scripts/lessons.gd`: the four studies as data: 13 chapters, grown and kid text, one quiz each.
   - `scripts/money_sim.gd`: the Money Machine (gold, bank loans, spending and taxes, the Fed, run 40 years).
-  - `scripts/npc.gd`: the hooded figure who walks the lawn.
-  - Saves: user://guestbook.json and user://progress.json
-    (%APPDATA%/Godot/app_userdata/The Jekyll Island Club/). Logs are there too, in logs/.
+  - `scripts/npc.gd`: the hooded figure who walks the lawn. `scripts/sound.gd`: ambience loader.
+  - Saves: user://guestbook.json, user://progress.json (ch1910 is set when the chapter is finished),
+    user://settings.json (graphics quality). (%APPDATA%/Godot/app_userdata/The Jekyll Island Club/).
 
 ## Hard rules (learned the hard way)
 - GDScript files use TABS. The owner edits in Godot, which saves tabs. Never mix.
@@ -29,65 +57,85 @@ Owner: founder of The Jekyll Island Club. Club email jekyllsclub@gmail.com. Site
   `open(p, "w").write(f(open(p).read()))` truncates before reading and wipes the file.
 - Beware substring replaces: replacing "panel.x" also hits "gb_panel.x".
 - Avoid multi-line lambdas as function arguments in GDScript. Use named functions or Callable.bind().
+- GDScript treats "inferred from a Variant" as an error here: give dictionary lookups and loop keys a type
+  (`var spec: Array = ...`, `String(key)`). Don't name anything `Shader` or `_set` (they clash with Godot).
 - No em dashes in any in-game text. Write like a real person from south Mississippi, plain and warm.
 - No trading signals, setups, indicator logic, or strategy anywhere (Trading Floor rule: "NO COURSE").
+  The Trading Floor screens and ticker show journaling and check-in text, never charts.
 - Money content must stay accurate: banks create deposits by lending, repayment destroys them,
   government deficits add deposits and taxes remove them, the Fed creates reserves when it buys bonds,
   cash withdrawal changes form not amount. Label toy models as toy models.
+- History stays accurate too. In the 1910 chapter the lines are imagined, the facts are not, and the
+  draft panel says so. Men: Nelson Aldrich (host), Arthur Shelton (his secretary), A. Piatt Andrew ("Abe"),
+  Henry P. Davison ("Harry", alias Wilbur), Frank Vanderlip (alias Orville), Paul Warburg, Benjamin Strong.
+  First names only. Cover story: duck hunting. The plan: the Aldrich Plan (National Reserve Association,
+  15 districts), published January 1911, never passed; the Federal Reserve Act (12 Reserve Banks, a Board
+  appointed by the President) was signed December 23, 1913; the Reserve Banks opened November 1914.
+  Accounts differ on some details (some lists add Charles Norton).
 
 ## Blender to Godot
 - Real-world meters. Blender (x, y, z) becomes Godot (x, z, -y). Rooms face the player walking in along Blender +Y.
 - Collision by name: `-col` (mesh + trimesh), `-colonly` (invisible hull). main.gd also forces
   backface_collision on every trimesh, so flipped faces can't become holes.
-- Export per scene with use_active_scene=True (otherwise every scene in the file gets exported):
-  `bpy.ops.export_scene.gltf(filepath=..., export_format='GLB', use_active_scene=True, export_apply=True,
-   export_lights=False, export_cameras=False, export_animations=False, export_image_format='AUTO')`
-- Characters share one 14-bone skeleton (Root, Hips, Spine, Head, UpperArm/LowerArm/UpperLeg/LowerLeg/Foot .L/.R).
-  Rigid skinning: each body part weighted 1.0 to one bone, then joined. Player animations export with
-  export_animation_mode='ACTIONS' (Idle, Walk, Run). The NPC uses NLA tracks named Idle/Walk with
-  export_animation_mode='NLA_TRACKS'.
-- Keep glow gentle: GlassLit emission 1.3, LampGlass 2.0, bulbs 2.2, door transoms about 1.1.
-  Game uses AgX tonemapping, ambient ~1.1, omni lights 0.25 to 1.3 energy with attenuation 0.9.
+- Export per scene with use_active_scene=True (otherwise every scene in the file gets exported). `kit.export`
+  does this; `images=False` leaves pictures out when the game lays them on itself (look.gd IMG).
+- Materials in Blender are plain colors. The game textures them by NAME: add every new material to
+  look.gd `MATS` ([texture set, meters per repeat, options]); the Blender color becomes the surface's
+  average color unless `orig: false` or `tint` says otherwise. Glowing ones go in `EMIT`, pictures in `IMG`.
+  The world shader projects textures in world meters (triplanar), so models need no UV unwrap.
+  Moving things use `"obj": true` so the texture rides along.
+- Empties: `LIGHT_<kind>_<n>` become lights (kinds and colors in markers.gd KINDS); `MARK_<name>` become
+  named positions and facings the scripts use (an empty faces its local +Y). Blender adds .001 to repeated
+  names; markers.gd strips it.
+- Objects named HiveLid and HiveFrame are animated in the Honey House; keep those names.
+- Characters: one 22-bone skeleton (Root, Hips, Spine, Chest, Neck, Head, and Shoulder, UpperArm,
+  LowerArm, Hand, UpperLeg, LowerLeg, Foot, Toe .L/.R), smooth skin weights, built from lofted rings.
+  Cloth materials are named `CH_<texture>__<what>` (look.gd lays that texture on using the mesh UVs, which
+  are in meters). `CHX_` materials are left alone (eyes, lamp glass). Hats and carried things are separate
+  meshes ending in Hat / Prop so actor.indoors() can take them off. Every character exports its animations
+  as NLA tracks: Idle, Walk, Run, SneakIdle, SneakWalk, CarryIdle, CarryWalk, Serve, Sit, SitTalk,
+  SitWrite, SitDrink, Talk, LookAround, LanternWalk (each character gets the sets its role needs).
+- The look is no longer "gentle glow": AgX tonemapping, SDFGI, volumetric fog, SSAO/SSIL, a color-grading
+  LUT, vignette and grain. Presets in look.gd PRESETS: dusk, interior, honey, studio, trading, night1910,
+  train, jekyll. Lights get a per-preset gain. F9 cycles graphics quality (high/medium/low) for slower PCs.
 
-## How rooms work in main.gd
-- `_build_level(name)` frees the old room, then calls `_build_<name>()`, which instances the .glb,
-  adds omni lights, and registers interactables with `add_interactable(pos, radius, prompt, callable)`.
-- Doors call `go_to(level, spawn_pos, facing_yaw)` (fade out, swap, fade in).
-  Yaw 0 looks toward Godot -Z (into a room). Keep spawn points outside the door prompt radius.
-- Panels: `open_panel(title, bbcode)` or `_show(kind, title, bbcode)`. Clickable links use
-  `[url=meta]` and land in `_on_link(meta)`.
+## How rooms work
+- `_build_level(name)` frees the old room, then builds it: main.gd's `_build_exterior/lobby/library`,
+  rooms.gd's `build_honey/studio/trading`, or chapter1910.gd for hoboken, privatecar, jekyll, meeting.
+  Each instances the .glb (main._instance applies the look), adds lights and registers interactables
+  with `add_interactable(pos, radius, prompt, callable)`.
+- Doors call `go_to(level, spawn_pos, facing_yaw)` (fade out, swap, fade in). Pass Vector3.INF when the
+  room places the player itself. Yaw 0 looks toward Godot -Z (into a room). Keep spawn points outside the
+  door prompt radius.
+- Panels: `open_panel(title, bbcode)` or `_show(kind, title, bbcode)`. Clickable links use `[url=meta]` and
+  land in `_on_link(meta)` (chapter1910 and rooms get first look). `url:<address>` opens a web page.
+  `main.after_panel` runs once when the panel closes.
+- In the chapter: `begin_scene()` / `end_scene()` wrap cutscenes (letterbox, cinematic camera); `line(who, text)`
+  shows a subtitle and waits; E moves a line along, Esc skips the scene.
+
+## Testing without playing
+- `godot --path godot -- --shot level=lobby pos=x,y,z look=x,y,z out=/path.png [player=x,y,z] [hud=1] [debug=1]`
+  saves a screenshot of any level (the 1910 levels and the three rooms too).
+- `godot --headless --path godot -- --autotest` plays the whole 1910 chapter with every scene skipped.
+- `godot --headless --path godot -- --stealthtest` sends a careful and a careless sneak through the yard.
+- After adding textures or models, run `godot --headless --path godot --import` once.
 
 ## Status
-Done: exterior (Queen Anne clubhouse, live oaks, moss, gas lamps, fireflies, ribbon banner, club sign),
-Grand Lobby (club seal above the desk, framed art, guest book, bell, notice board, marks),
-Library (four volumes with chapters and quizzes, kids mode switch, bank ledger, sealed envelope,
-the Money Machine), the player, the hooded figure.
+Done: exterior (Queen Anne clubhouse, live oaks with leaf cards and hanging moss, grass, gas lamps,
+fireflies, crickets), Grand Lobby, Library (unchanged content), the three rooms (Honey House, Drafting Room,
+Trading Floor), the 1910 chapter, all characters, the Skyrim / Dark Souls look and interface.
+Ways into 1910: take the railroad ticket from the hooded figure after he's talked a while, or pick up the
+ticket on the lobby desk.
 
-## Next rooms (from the owner's brief)
-Build each as its own Blender scene, export, add `_build_<room>()` in main.gd, and replace the
-lobby door's `_room_door(...)` call with `go_to(...)`. Lobby doors (Godot): Trading (-9, -10), Studio (9, -4), Honey (9, -10).
-
-1. The Honey House (Jekyll's 40 Acre Farm). Amber, gold, warm wood, Georgia type like the honey label
-   (art/textures/honey_label.jpg). A hive you open to pull a frame (bees, comb, capped honey, colony facts).
-   A shelf of jars: Raw Honey, $15, 16 oz, harvested in Carrier, Mississippi, raw, unfiltered, never heated.
-   Order by call or text 601-569-3719 or stikk2004@gmail.com. Wholesale for local businesses.
-   Bee removal, including commercial jobs (gas stations, storefronts). Label disclaimer: Mississippi Cottage
-   Food Law, not inspected by MSDH, do not feed honey to children under one year.
-   Open question for the owner: the cottage food law generally limits sales to direct-to-consumer, so confirm wholesale is allowed.
-2. The Drafting Room (Jekyll Studio). Framed screens of live sites (art/textures/work_*.jpg):
-   rootsbehavioralhealth.org, go-git-er.com, tinytidesplayroom.netlify.app, zvautomotive.com, prscms.org,
-   40acrefarm.netlify.app. Pricing chalkboard: $50 one-time setup (domain, hosting, going live, basic upkeep)
-   plus a build fee that scales with the work (simple site about $200 build, about $250 total).
-   Optional monthly plan $30 to $300+ by workload. Client owns the site outright.
-   Contact stikk2004@gmail.com, (601) 569-3719. A drafting table to "commission a draft".
-   A hidden drawer marked 1997 with a Geocities-style gag.
-3. The Trading Floor (Jekyll Island Trading, Discord community; owner trades MNQ/NQ intraday).
-   Dark room, green and amber screens, scrolling ticker. Big "NO COURSE" plaque: journaling, psychology,
-   and accountability are shared, never strategy. Pre-market check-in (sleep, focus, mood gives
-   ready / take it easy / sit out). Leaderboard and journal as members-only doors (Discord and journal links
-   not known yet). Never any signals, setups, or strategy.
+## Open questions for the owner
+- Wholesale honey: the cottage food law generally limits sales to direct-to-consumer, so the shelf
+  doesn't offer wholesale until the owner confirms.
+- The town is spelled "Carriere" on the Honey House shelf (ZV Automotive's site spells it that way; the
+  brief and the 40 Acre Farm site say "Carrier"). Change it in rooms.gd if the owner prefers.
+- Discord and journal links for the Trading Floor's members-only doors aren't known yet.
 
 ## Ideas on the list
-- Optional: Higgsfield image-to-3D for a more detailed player or props (uses the owner's Higgsfield credits; ask first).
-- A web export of the game to feature on jekyllsclub.com.
+- Optional: Higgsfield image-to-3D for more detailed people or props (uses the owner's credits; ask first).
+  Not used so far: the owner asked for no Higgsfield.
+- A web export of the game to feature on jekyllsclub.com (would want graphics quality low or medium).
 - Let the hooded figure wander into the lobby, or give him a faint rim light.

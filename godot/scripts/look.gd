@@ -336,7 +336,8 @@ static func cloth(tex_name: String, src: BaseMaterial3D) -> StandardMaterial3D:
 	m.albedo_texture = s[0]
 	m.normal_enabled = true
 	m.normal_texture = s[1]
-	m.normal_scale = 0.5
+	# fine weaves shimmer at a distance if their bumps are strong
+	m.normal_scale = 0.2 if tex_name in ["linen", "wool", "tweed", "velvet"] else 0.5
 	m.ao_enabled = true
 	m.ao_texture = s[2]
 	m.ao_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED

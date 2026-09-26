@@ -551,6 +551,7 @@ func _build_privatecar() -> void:
 	RenderingServer.global_shader_parameter_set("ground_y", 0.0)
 	_load("res://models/private_car.glb")
 	main._safety_floor()
+	main._dust(Vector3(0.0, 1.5, 0.0), Vector3(1.5, 1.0, 10.0), 180)
 	_window_view()
 	var seats := {"frank": "seat_frank", "harry": "seat_harry", "paul": "seat_paul", "ben": "seat_ben",
 		"nelson": "seat_nelson", "abe": "seat_abe", "arthur": "seat_arthur"}
@@ -759,6 +760,7 @@ func _build_meeting() -> void:
 	RenderingServer.global_shader_parameter_set("ground_y", 0.0)
 	_load("res://models/meeting_room.glb")
 	main._safety_floor()
+	main._dust(Vector3(0.0, 1.9, 0.0), Vector3(5.3, 1.7, 3.3), 260)
 	for key in MEN.keys():
 		var a := _actor(key)
 		var seat: String = "seat_" + String(key)

@@ -88,6 +88,11 @@ func _ready() -> void:
 	ambience = AudioStreamPlayer.new()
 	ambience.volume_db = -10.0
 	add_child(ambience)
+	if OS.get_cmdline_user_args().has("--roomtest"):
+		_build_level("lobby")
+		player.place(SPAWN_LOBBY, 0.0)
+		rooms.roomtest()
+		return
 	if OS.get_cmdline_user_args().has("--stealthtest"):
 		_build_level("exterior")
 		chapter.stealthtest()
@@ -279,6 +284,47 @@ func _ensure_collision(root: Node) -> void:
 			(cs.shape as ConcavePolygonShape3D).backface_collision = true
 
 
+func _dust(center: Vector3, extents: Vector3, amount := 220) -> void:
+	## motes drifting in the lamplight: only the ones near a light show up
+	var p := GPUParticles3D.new()
+	p.amount = amount
+	p.lifetime = 14.0
+	p.preprocess = 14.0
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	pm.emission_box_extents = extents
+	pm.gravity = Vector3(0, -0.004, 0)
+	pm.initial_velocity_min = 0.01
+	pm.initial_velocity_max = 0.05
+	pm.spread = 180.0
+	pm.turbulence_enabled = true
+	pm.turbulence_noise_strength = 0.15
+	pm.turbulence_noise_speed_random = 0.2
+	pm.scale_min = 0.5
+	pm.scale_max = 1.4
+	var grad := Gradient.new()
+	grad.offsets = PackedFloat32Array([0.0, 0.2, 0.8, 1.0])
+	grad.colors = PackedColorArray([Color(1, 1, 1, 0), Color(1, 1, 1, 1), Color(1, 1, 1, 1), Color(1, 1, 1, 0)])
+	var gt := GradientTexture1D.new()
+	gt.gradient = grad
+	pm.color_ramp = gt
+	p.process_material = pm
+	var q := QuadMesh.new()
+	q.size = Vector2(0.012, 0.012)
+	var m := StandardMaterial3D.new()
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	m.vertex_color_use_as_albedo = true
+	m.albedo_color = Color(1.0, 0.92, 0.78, 0.55)
+	m.disable_receive_shadows = true
+	q.material = m
+	p.draw_pass_1 = q
+	p.position = center
+	p.visibility_aabb = AABB(-extents * 1.5, extents * 3.0)
+	level.add_child(p)
+
+
 func _safety_floor() -> void:
 	var body := StaticBody3D.new()
 	var cs := CollisionShape3D.new()
@@ -407,6 +453,7 @@ func _build_lobby() -> void:
 	_instance("res://models/lobby.glb")
 	_safety_floor()
 	_ambience("room")
+	_dust(Vector3(0.0, 2.2, -7.0), Vector3(9.0, 2.0, 6.0), 320)
 	_omni(Vector3(0.0, 4.0, -7.0), Color("ffcf8a"), 1.3, 20.0)
 	_omni(Vector3(-2.2, 1.9, -11.3), Color("ffd89a"), 0.5, 6.0)
 	_omni(Vector3(0.0, 2.8, -12.6), Color("ffcf8a"), 0.5, 8.0, false)
@@ -617,6 +664,7 @@ func _build_library() -> void:
 	_instance("res://models/library.glb")
 	_safety_floor()
 	_ambience("room")
+	_dust(Vector3(0.0, 2.0, -6.0), Vector3(7.0, 1.8, 5.5), 260)
 	_omni(Vector3(0.0, 3.9, -6.0), Color("ffcf8a"), 1.2, 16.0)
 	_omni(Vector3(3.6, 1.05, -6.4), Color("ffd89a"), 0.55, 4.5)
 	_omni(Vector3(1.2, 3.0, -11.6), Color("ff9a40"), 0.6, 6.0)
