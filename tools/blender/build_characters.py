@@ -155,6 +155,13 @@ CAST = {
                      face=dict(jaw=1.1, nose=1.05, brow=1.1, chin=1.05, age=0.3), mustache=("plain", 0.9), mustache_mat="hair_sandy",
                      coat="work", coat_mat="denim", trousers="denim", shoes="shoe_brown", tie=None, vest=None, hat="cap", hat_mat="wool_charcoal",
                      prop="lantern", gloves=True, anims=("base", "lantern")),
+    # "Jekyll": the man who hires you (made up; the history around him is not). Long black coat, gray at the temples.
+    "jekyll": dict(file="npc_jekyll", height=1.82, build=1.0, skin="skin_fair", hair="hair_gray", hair_style="parted", bald=0.15,
+                   face=dict(jaw=1.1, nose=1.2, nose_len=1.15, brow=1.25, chin=1.05, age=0.6, width=0.97), mustache=("plain", 1.1),
+                   mustache_mat="hair_gray", brows="hair_dark", coat="overcoat", coat_mat="wool_black", trousers="wool_charcoal",
+                   shoes="shoe_black", tie="tie_green", vest="vest_gray", hat="bowler", hat_mat="felt_black", band="band_black",
+                   scarf="scarf_wine", gloves=True, anims=("base", "talk"),
+                   gait=dict(a=0.35, stance=0.6, lean=0.05, arm_swing=0.2, lift=0.1, bob=0.015)),
     # the train's conductor: navy frock coat, brass buttons, a gray walrus mustache, his lamp
     "conductor": dict(file="npc_conductor", height=1.77, build=1.1, belly=0.45, skin="skin_ruddy", hair="hair_gray", hair_style="short",
                       face=dict(jaw=1.15, nose=1.1, brow=1.2, chin=1.0, age=0.7), mustache=("walrus", 1.1), mustache_mat="hair_gray",
@@ -227,7 +234,7 @@ def build(key):
     vest = mats.get(spec.get("vest") or "", None)
     gloves = spec.get("gloves", False)
 
-    C.add_legs(part, body, mats[spec["trousers"]], hem=0.1)
+    C.add_legs(part, body, mats[spec["trousers"]], hem=0.1, under_skirt=spec.get("coat") in ("overcoat", "frock", "sack", "work"))
     C.add_shoes(part, body, mats[spec["shoes"]], mats["sole"], boot_top=0.16 if key in ("yardman", "brakeman") else 0.0)
 
     if coat == "cloak":

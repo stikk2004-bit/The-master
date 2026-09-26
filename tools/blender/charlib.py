@@ -315,14 +315,18 @@ def torso_w(body):
 
 
 def skirt_w(body, reach=1.0):
-    """Coat tails and skirts: hips at the waist, then share with the leg on their own side."""
+    """Coat tails and skirts. Over the front of each thigh the cloth goes where the thigh goes, so a
+    long stride or sitting down can't push the leg out through it; at the back it hangs from the hips.
+    The character faces -Y."""
     k = body.k
 
     def w(p):
         z = p.z / k
-        t = smoothstep(0.92, 0.55, z) * 0.85 * reach
-        side = smoothstep(-0.05, 0.05, p.x)
-        return {"Hips": 1.0 - t, "UpperLeg.L": t * side, "UpperLeg.R": t * (1 - side)}
+        depth = smoothstep(0.97, 0.8, z)                    # 0 at the waist, 1 from the upper thigh down
+        front = smoothstep(0.03 * k, -0.07 * k, p.y)        # 1 over the front of the legs, 0 behind
+        follow = depth * (0.4 + 0.58 * front) * reach
+        side = smoothstep(-0.03 * k, 0.03 * k, p.x)
+        return {"Hips": 1.0 - follow, "UpperLeg.L": follow * side, "UpperLeg.R": follow * (1 - side)}
     return w
 
 
@@ -419,8 +423,8 @@ def add_skirt(part, body, mat, bottom=0.55, flare=1.18, split=True):
     rings = []
     for z in zs:
         t = (0.94 - z) / max(0.94 - bottom, 0.01)
-        hx = lerp(0.172, 0.172 * flare + 0.02, t) * k * b ** 0.5
-        hf = lerp(0.124, 0.124 * flare + 0.03, t) * k * b ** 0.5
+        hx = lerp(0.176, 0.172 * flare + 0.028, t) * k * b ** 0.5
+        hf = lerp(0.128, 0.124 * flare + 0.038, t) * k * b ** 0.5
 
         def shape(th, ri, t=t):
             extra = 0.0
@@ -443,7 +447,8 @@ def add_skirt(part, body, mat, bottom=0.55, flare=1.18, split=True):
     part.loft([rings[-1], inner[0]], 32, mat, cap_start=False, cap_end=False)
 
 
-def add_legs(part, body, trouser_mat, hem=0.1, wide=1.0, boots=False):
+def add_legs(part, body, trouser_mat, hem=0.1, wide=1.0, boots=False, under_skirt=False):
+    """under_skirt: a coat hangs over the hips, so the tops of the legs are slimmed to stay inside it."""
     k = body.k
     for s, sx in (("L", 1), ("R", -1)):
         hip, knee = body.bone("UpperLeg." + s)
@@ -456,9 +461,12 @@ def add_legs(part, body, trouser_mat, hem=0.1, wide=1.0, boots=False):
         ]
         for z, hx, hf in pts:
             zz = z * k
+            if under_skirt and z > 0.8:
+                slim = lerp(0.82, 1.0, (0.97 - z) / 0.17) if z < 0.97 else 0.8
+                hx, hf = hx * slim, hf * slim
             if zz > hip.z:
                 t = 0.0
-                c = Vector((hip.x * 0.75, 0.0, zz))
+                c = Vector((hip.x * (0.62 if under_skirt else 0.75), 0.0, zz))
             elif zz > knee.z:
                 t = (hip.z - zz) / (hip.z - knee.z)
                 c = hip.lerp(knee, t)

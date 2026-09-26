@@ -10,7 +10,7 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
 ## Folder layout
 - `blender/JekyllClubGame.blend`: every model. Scenes: Clubhouse_Exterior, Lobby, Library,
   Player_Character, Player_Waiter, NPC_Hooded, NPC_Aldrich / Shelton / Andrew / Davison / Vanderlip /
-  Warburg / Strong / Yardman / Brakeman / Porter / Conductor / Watchman / Steward, Hoboken_Yard, Hoboken_Train, Hoboken_Boxcars,
+  Warburg / Strong / Yardman / Brakeman / Porter / Conductor / Watchman / Steward / Jekyll, Hoboken_Yard, Hoboken_Train, Hoboken_Boxcars,
   Motorcar_1910, Private_Car, Jekyll_Meeting, Honey_House, Drafting_Room, Trading_Floor
   (and "Scene", an unrelated Picayune town test; leave it alone).
   Text block `club_lib.py` inside the .blend has the old modeling helpers.
@@ -21,7 +21,7 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
   - `texgen.py`: paints the tileable PBR textures and foliage cards into godot/textures/ (numpy, no downloads).
   - `paint_1910.py`, `paint_rooms.py`: painted pictures (blinds, skyline, chalkboards, plaque, ticker, screens...).
   - `sounds.py`: synthesized sound into godot/sounds/ (yard, train, fire, marsh, crickets, room, whistle, door,
-    shutter, shot). `python tools/sounds.py door shot` makes just those.
+    shutter, shot, motor). `python tools/sounds.py door shot` makes just those.
   - `fonts/`: .woff copies of the OFL fonts for painting text.
   - `blender/kit.py`: the modeling kit (MB mesh builder, mat, img_mat, text_mesh, new_scene, export).
   - `blender/charlib.py`, `anims.py`, `build_characters.py`: the characters and their animations.
@@ -40,18 +40,28 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
   - `scripts/main.gd`: levels, the present-day rooms (exterior, lobby, library), lessons UI, bank ledger,
     guest book, NPC hookup, dust, ambience, settings, screenshots and test switches.
   - `scripts/rooms.gd`: the Honey House, the Drafting Room and the Trading Floor.
-  - `scripts/chapter1910.gd`: the 1910 chapter (Hoboken, the private car, Jekyll Island, the meeting room),
-    the pocket Kodak, the caught resets, the evidence panel at the end.
+  - `scripts/chapter1910.gd`: the 1910 chapter (River Street and the Hoboken yard, the private car, Jekyll
+    Island, the meeting room), the pocket Kodak, the caught resets, the evidence panel at the end.
+  - `scripts/mission_ui.gd`: the mission layer of the HUD: big countdown (set_clock), objective box
+    (hud.set_objective / hud.set_timer land here), camera item slot, viewfinder, the photo print that
+    pops up with who's in it, and the strip of prints still needed.
+  - `scripts/drive.gd`: Jekyll's motorcar (W/S throttle and brake, A/D steer, E out when stopped).
   - `scripts/look.gd`: textured materials by Blender material name (MATS, EMIT, IMG tables),
     lighting presets, color grading, graphics quality.
   - `scripts/foliage.gd`: leaf, needle, palmetto, moss and grass cards scattered over canopies and lawns.
   - `scripts/markers.gd`: Blender LIGHT_ and MARK_ empties become lights and named positions.
   - `scripts/actor.gd`, `scripts/guard.gd`: scripted people; watchmen with sight, hearing, lanterns.
-    A guard's `watching = false` keeps him walking his round without noticing anyone; `pauses` sets where
-    he stops and for how long; `arm(..., with_lantern)`.
+    The lantern throws a forward SpotLight beam; standing in the beam gets you seen in under a second,
+    outside it they see about 6 m in the dark (15 under a lamp), less if you crouch, half as far if you're
+    up high. `roam(spots, others, nav_map)` makes them pick random places across the yard, away from the
+    other watchmen and their targets, and walk there on the navmesh the chapter bakes at load. They swing
+    the beam when they stop, walk over to look when they half see you (`alarmed` calls the nearest other one
+    over). `watching = false` keeps a guard walking without noticing anyone; a fixed round still works.
   - `scripts/player.gd`: third-person controller (WASD, mouse orbit, Shift run, C sneak, Space jump,
-    R unstuck, step-up), outfits (club, waiter), carrying a tray, the pocket Kodak (set_kodak), noise level
-    for guards. The tray and the Kodak follow the left hand but stay level.
+    R unstuck, step-up), outfits (club, waiter), carrying a tray, noise level for guards. The camera is an
+    item once `has_camera`: Q raises it (first-person viewfinder, wheel zoom, click emits `shutter`).
+    Space against a ledge from knee to chest high climbs onto it (_try_mantle). hide_at()/unhide() tuck
+    the player out of sight (guards ignore a hidden player unless right on top of him).
   - `scripts/hud.gd`: title, prompt bar, reading panel with [url] links, guest book, toast, chime,
     location banners, subtitles (say), letterbox, chapter cards, objective line, a second line under it
     for countdowns and photo tallies (set_timer), sneak eye (sneak_eye.gd).
@@ -132,14 +142,18 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
   `main.after_panel` runs once when the panel closes.
 - In the chapter: `begin_scene()` / `end_scene()` wrap cutscenes (letterbox, cinematic camera); `line(who, text)`
   shows a subtitle and waits; E moves a line along (in cutscenes and while pouring coffee), Esc skips the scene.
-- The chapter, as played: watch the seven arrive by cab, each at his own pace (MEN speed), climb the real
-  steps of the observation platform and go in at the rear door. Then sneak past four watchmen (yard detective,
-  brakeman, night watchman in the crate lane, conductor south of the car) to the car's dark front steps
-  (a faint diamond marks them) within 3:30, or the train leaves without you. In the car: listen at the pantry,
-  put on the steward's jacket, pour for Frank and Nelson, then photograph four papers in Arthur's valise with
-  the pocket Kodak (hold E) while the real steward makes his rounds (3:00; he only minds you in the lounge).
+- The chapter, as played: a letter, then Jekyll (a made-up character; the evidence panel says so) by his
+  motorcar at the west end of River Street. He hands over the Kodak (12 exposures). Drive to the freight gate,
+  walk in, and the clock starts (7:00). The seven arrive by cab while you play, each at his own pace, talk
+  with the porter, climb the observation platform steps and go in at the rear door; each must be photographed
+  first (the print pops up with his full name and position) or the yard starts over. Five watchmen roam with
+  beams. Hide under the tarp wagon (it looks onto the platform), in the empty boxcar, or in the shed doorway;
+  climb crates or the boxcar ladders. All seven taken, board at the car's dark front steps (a faint diamond
+  marks them) before the train leaves. In the car: listen at the pantry,
+  put on the steward's jacket, pour for Frank and Nelson, then photograph the four papers by Arthur's valise
+  with the Kodak while the real steward makes his rounds (3:00; he only minds you in the lounge).
   On Jekyll: pour Nelson's coffee, hear the plan, the men go out "duck hunting", photograph the chalkboard and
-  Paul's and Abe's notes only while Arthur's head is down, take the clean copy when a shot on the marsh draws
+  Paul's and Abe's notes, keeping the camera down whenever Arthur looks up, take the clean copy when a shot on the marsh draws
   him to the window, and get out the door before he's back. Caught anywhere: that part starts over.
   The end is the evidence panel with the real history.
 
@@ -147,10 +161,11 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
 - `godot --path godot -- --shot level=lobby pos=x,y,z look=x,y,z out=/path.png [player=x,y,z] [hud=1] [debug=1]`
   saves a screenshot of any level (the 1910 levels and the three rooms too).
 - `godot --headless --path godot -- --autotest` plays the whole 1910 chapter with every scene skipped.
-- `godot --headless --path godot -- --stealthtest` sends a careful and a careless sneak through the yard.
+- `godot --headless --path godot -- --stealthtest` watches the roaming watchmen for a minute from under the tarp
+  (how far they get, how spread out they stay, whether a hidden player stays hidden), then stands in a beam.
 - `godot --headless --path godot -- --roomtest` uses everything in the three rooms.
-- `--shot` extras: `swing=Door_Library` opens a door first; `setup=rear|front|valise|room` stages a chapter
-  moment (chapter1910 shot_setup).
+- `--shot` extras: `swing=Door_Library` opens a door first; `setup=rear|front|finder|jekyll` stages a chapter
+  moment (chapter1910 shot_setup; finder looks through the Kodak from under the tarp).
 - After adding textures or models, run `godot --headless --path godot --import` once.
 
 ## Status
@@ -159,8 +174,10 @@ fireflies, crickets), Grand Lobby, Library (unchanged content), the three rooms 
 Trading Floor), the 1910 chapter, all characters, the Skyrim / Dark Souls look and interface.
 Ways into 1910: take the railroad ticket from the hooded figure after he's talked a while, or pick up the
 ticket on the lobby desk.
-Stealth difficulty: the owner has said to leave it as it is for now (lanterns 2.5x brighter, sight 14 m,
-four watchmen). The stealthtest's careful sneak can still get caught waiting at the last crossing.
+Stealth: five watchmen roam the yard at random with lantern beams, spread out (about 14 m apart on average in
+the stealthtest). The owner wants it very hard to get the pictures without being seen.
+Coat skirts follow the thighs in front (charlib.skirt_w) and leg tops are slimmed under coats, arms hang a
+little out from the body: that keeps legs and cuffs from showing through coats when walking and sitting.
 
 ## Open questions for the owner
 - Wholesale honey: the cottage food law generally limits sales to direct-to-consumer, so the shelf
@@ -170,7 +187,12 @@ four watchmen). The stealthtest's careful sneak can still get caught waiting at 
 - Discord and journal links for the Trading Floor's members-only doors aren't known yet.
 
 ## Ideas on the list
-- Optional: Higgsfield image-to-3D for more detailed people or props (uses the owner's credits; ask first).
-  Not used so far: the owner asked for no Higgsfield.
+- Higgsfield: the owner OK'd spending their credits to redo the characters. The account had 10 credits
+  (free plan): enough for two Tripo text-to-3D models at 5 each, no more. Generated: Aldrich (job
+  996d5529-fd2c-47c4-89b5-7e999ad92863) and the player in club clothes (job ab7f1559-bab4-4e72-b27f-2526efc77cd0).
+  The cloud session couldn't download them (network policy blocks the CDN host). Plan once they're in the repo
+  (e.g. art/higgsfield/*.glb): scale to height, bind to the 22-bone rig with automatic weights so all the
+  existing animations play; one shell of a mesh, so no cloth can poke through. A full cast (about 17) would
+  need roughly 170 more credits at 5 each plus nothing for rigging (done in Blender).
 - A web export of the game to feature on jekyllsclub.com (would want graphics quality low or medium).
 - Let the hooded figure wander into the lobby, or give him a faint rim light.

@@ -9,11 +9,12 @@ extends Node
 ## always right." They told anyone who asked that they were going duck hunting.
 ## The lines below are imagined. The facts around them are not.
 ##
-## The player's part: slip past the yard's four watchmen and board at the car's dark front
-## steps before the train leaves; serve the coffee in a borrowed steward's jacket; take
-## pictures of Arthur's papers with a pocket Kodak while the real steward makes his rounds;
-## and on the island, once the men go out "duck hunting", photograph the chalkboard and the
-## notes and walk off with the clean copy. Get caught and that part starts over.
+## The player's part: a letter and a man who calls himself Jekyll (made up; the history around
+## him is not), a drive down River Street, then a camera and seven faces to get on film while the
+## yard's watchmen roam with their lanterns. Board at the car's dark front steps. Pour the coffee in
+## a borrowed steward's jacket and photograph the papers in Arthur's valise while the real steward
+## makes his rounds. On the island, once the men go out "duck hunting", photograph the chalkboard
+## and the notes and walk off with the clean copy. Get caught and that part starts over.
 
 const ActorScript := preload("res://scripts/actor.gd")
 const GuardScript := preload("res://scripts/guard.gd")
@@ -21,6 +22,7 @@ const Sound := preload("res://scripts/sound.gd")
 const Look := preload("res://scripts/look.gd")
 const Foliage := preload("res://scripts/foliage.gd")
 const Markers := preload("res://scripts/markers.gd")
+const DriveScript := preload("res://scripts/drive.gd")
 
 ## each man walks at his own pace (meters a second): the Senator slowest, Harry quickest
 const MEN := {
@@ -42,9 +44,29 @@ const ARRIVALS := [
 	["harry", [["Harry", "Is Orville aboard yet?"], ["The porter", "Sir?"], ["Harry", "Never mind. He'll know who I mean."]]],
 	["ben", [["Nelson", "That's all of us. Ben, get in out of the cold."], ["Nelson", "Tell the conductor we're ready."]]],
 ]
-const DEPART_SECONDS := 210.0      # three and a half minutes to get aboard
+## who they were, for the prints. Full names here: the pictures are for Jekyll, not for them.
+const WHO := {
+	"nelson": ["Nelson W. Aldrich", "Senator from Rhode Island. Chairman of the National Monetary Commission, and the host."],
+	"arthur": ["Arthur B. Shelton", "The Senator's private secretary. He kept the papers."],
+	"abe": ["A. Piatt Andrew", "Assistant Secretary of the Treasury. An economist from Harvard."],
+	"paul": ["Paul M. Warburg", "Partner at Kuhn, Loeb and Company. Born in Hamburg; he knew European central banking best."],
+	"frank": ["Frank A. Vanderlip", "President of the National City Bank of New York."],
+	"harry": ["Henry P. Davison", "Partner at J. P. Morgan and Company."],
+	"ben": ["Benjamin Strong", "Vice president of the Bankers Trust Company."],
+}
+## the yard's watchmen: model, name, the spot he starts at, what he says when he half sees you, and when he gives up
+const WATCHMEN := [
+	["res://models/npc_yardman.glb", "The yard detective", 12, ["Who's there?", "Somebody by those crates?", "Come on out where I can see you."], ["Rats in the freight again.", "Nobody. Just this fog."]],
+	["res://models/npc_brakeman.glb", "The brakeman", 23, ["Hey. Somebody down there?", "Hello?"], ["Hm. Nothing.", "Getting jumpy in my old age."]],
+	["res://models/npc_watchman.glb", "The night watchman", 8, ["Who's that in the freight?", "I hear you. Come on out."], ["Cats. It's always cats.", "Nobody. Nobody ever is."]],
+	["res://models/npc_conductor.glb", "The conductor", 3, ["Is somebody back there by the Senator's car?", "Who goes there?"], ["Nobody. Good.", "Just the steam."]],
+	["res://models/npc_yardman.glb", "The railroad bull", 18, ["You. Stop right there.", "I see you moving."], ["Hm.", "Not tonight, whoever you are."]],
+]
+const FILM := 12                   # exposures on Jekyll's roll
+const MISSION_SECONDS := 420.0     # from the freight gate until the train pulls out
+const FIRST_CAB := 16.0
+const CAB_GAP := 40.0
 const ROUNDS_SECONDS := 180.0      # the steward's rounds before he turns the lamps down
-const EXPOSURE := 2.2              # seconds to hold still for a picture by lamplight
 
 ## what the pocket Kodak can bring home. The papers are imagined; what they describe is not.
 const PHOTOS := {
@@ -83,14 +105,18 @@ var window_scroll: Array = []
 var beacons: Array = []            # faint markers over where to go: [Node3D, key]
 var photos: Array = []             # keys of the pictures taken so far, in order
 var have_copy := false
+var spots: Array = []              # where the yard's watchmen may roam
+var motorcar: CharacterBody3D
+var driving := false
+var film := FILM
+var _boarded := {}
+var _run := 0
+var _next_cab := 0
 var _caught_busy := false
-var _stealth_on := false
 var _clock := 0.0
 var _clock_on := false
 var _clock_text := ""
 var _clock_out: Callable = Callable()
-var _expose_key := ""
-var _expose_t := 0.0
 var _arthur_state := ""            # writing, looking, window, walking
 var _arthur_t := 0.0
 var _arthur_seen := 0.0
@@ -135,15 +161,17 @@ func thought(text: String) -> void:
 
 
 func until_arrived(a) -> void:
-	while a.is_walking() and not skipping:
+	## wait for someone to finish walking; stops quietly if the room they were in is gone
+	while is_instance_valid(a) and a.is_walking() and not skipping:
 		await get_tree().process_frame
-	if skipping:
+	if skipping and is_instance_valid(a):
 		a.skip()
 
 
 func begin_scene() -> void:
 	in_scene = true
 	skipping = false
+	player.set_camera_up(false)
 	main.busy = true
 	player.enabled = false
 	hud.set_prompt("")
@@ -453,11 +481,14 @@ func start() -> void:
 	served.clear()
 	photos.clear()
 	have_copy = false
+	player.has_camera = false
+	hud.mission.set_item("")
 	stage = "hoboken"
 	main.go_to("hoboken", Vector3.ZERO, 0.0)
 
 
 func build(level_name: String, lvl: Node3D) -> void:
+	_run += 1              # anything still waiting on the last room gives up
 	level = lvl
 	marks.clear()
 	actors.clear()
@@ -465,10 +496,19 @@ func build(level_name: String, lvl: Node3D) -> void:
 	lamp_list.clear()
 	window_scroll.clear()
 	beacons.clear()
-	_stealth_on = false
 	_clock_on = false
-	_expose_key = ""
 	_arthur_state = ""
+	driving = false
+	hud.mission.set_clock("", -1.0)
+	hud.mission.set_slots(0)
+	hud.mission.show_finder(false)
+	player.set_camera_up(false)
+	if player.hidden:
+		player.unhide(player.global_position, player.yaw)
+	if not player.shutter.is_connected(_on_shutter):
+		player.shutter.connect(_on_shutter)
+	if not player.camera_toggled.is_connected(_on_camera_toggled):
+		player.camera_toggled.connect(_on_camera_toggled)
 	rear_door = null
 	front_door = null
 	hud.set_timer("")
@@ -504,7 +544,11 @@ func leave_to_present() -> void:
 	stage = ""
 	ambience.stop()
 	player.set_carrying(false)
+	player.set_camera_up(false)
 	player.set_kodak(false)
+	player.has_camera = false
+	hud.mission.set_item("")
+	hud.mission.set_clock("", -1.0)
 	player.set_outfit("club")
 	player.can_sneak = true
 	hud.set_objective("")
@@ -518,6 +562,10 @@ func leave_to_present() -> void:
 
 
 # ================================================================== HOBOKEN
+## River Street first: a letter, Jekyll by his motorcar, a drive down to the yard's freight gate.
+## Through the gate the clock starts. The seven come by cab one at a time while you're in the yard,
+## and each has to be on film before he goes in at the Senator's rear door. Five watchmen roam
+## the yard with bull's-eye lanterns. All seven taken, you board at the car's dark front steps.
 func _build_hoboken() -> void:
 	main._air("night1910")
 	RenderingServer.global_shader_parameter_set("ground_y", 0.0)
@@ -527,6 +575,7 @@ func _build_hoboken() -> void:
 	rear_door = train_node.find_child("RearDoor", true, false) as Node3D
 	front_door = train_node.find_child("FrontDoor", true, false) as Node3D
 	main._safety_floor()
+	_bake_nav()
 	level.add_child(_steam(mk("stack") + Vector3(0, 0.3, 0), 70, true))
 	level.add_child(_steam(mk("cylinder_L"), 30))
 	level.add_child(_steam(mk("cylinder_R"), 30))
@@ -540,27 +589,51 @@ func _build_hoboken() -> void:
 		var a := _actor(String(key))
 		a.visible = false
 		a.place(mk("cab_out") + Vector3(0, -30, 0), 0.0)
-	# four watchmen: the yard detective between the tracks, the brakeman along the train,
-	# the night watchman at the edge of the crate lane, the conductor south of the car
-	var det := _guard("res://models/npc_yardman.glb", "The yard detective", _route("detective", [0, 1, 2, 3, 4, 5]))
-	det.lines_suspicious = ["Who's there?", "Somebody by those crates?", "Come on out where I can see you."]
-	det.lines_clear = ["Rats in the freight again.", "Nobody. Just this fog."]
-	var brk := _guard("res://models/npc_brakeman.glb", "The brakeman", _route("brakeman", [0, 1, 2, 3, 4, 5, 6]))
-	brk.lines_suspicious = ["Hey. Somebody down there?", "Hello?"]
-	brk.lines_clear = ["Hm. Nothing.", "Getting jumpy in my old age."]
-	var wat := _guard("res://models/npc_watchman.glb", "The night watchman", _route("watchman", [0, 1, 2, 3, 2, 1]))
-	wat.lines_suspicious = ["Who's that in the freight?", "I hear you. Come on out."]
-	wat.lines_clear = ["Cats. It's always cats.", "Nobody. Nobody ever is."]
-	wat.pauses = {0: 5.0, 3: 6.0}
-	wat.patrol_speed = 0.95
-	var con := _guard("res://models/npc_conductor.glb", "The conductor", _route("conductor", [0, 1, 2, 3]))
-	con.lines_suspicious = ["Is somebody back there by the Senator's car?", "Who goes there?"]
-	con.lines_clear = ["Nobody. Good.", "Just the steam."]
-	con.pauses = {0: 6.0, 2: 5.0}
-	con.patrol_speed = 0.9
-	# the motor cab
+	# Jekyll, by his motorcar at the corner
+	var jk := _actor("res://models/npc_jekyll.glb", true)
+	actors["jekyll"] = jk
+	jk.display_name = "Jekyll"
+	jk.place(mk("jekyll"), mk_yaw("jekyll"))
+	# the yard's watchmen: they roam, spread out, and swing their lanterns
+	spots.clear()
+	var i := 0
+	while marks.has("spot_%d" % i):
+		spots.append(mk("spot_%d" % i))
+		i += 1
+	var map := level.get_world_3d().navigation_map
+	for k in WATCHMEN.size():
+		var spec: Array = WATCHMEN[k]
+		var start: Vector3 = spots[int(spec[2]) % maxi(spots.size(), 1)] if not spots.is_empty() else mk("gate_in")
+		var g := _guard(String(spec[0]), String(spec[1]), [start])
+		g.lines_suspicious = spec[3]
+		g.lines_clear = spec[4]
+		g.alarmed.connect(_on_alarm.bind(g))
+		g.active = true
+		g.watching = false
+	for g in guards:
+		g.roam(spots, guards, map)
+	# the motor cab that brings them
 	cab = main._instance("res://models/motorcar.glb")
 	cab.visible = false
+	_headlamps(cab)
+	# Jekyll's motorcar, which you drive
+	motorcar = CharacterBody3D.new()
+	motorcar.set_script(DriveScript)
+	level.add_child(motorcar)
+	var body_model: Node3D = main._instance("res://models/motorcar.glb")
+	motorcar.setup(body_model)
+	_headlamps(body_model)
+	motorcar.global_position = mk("jcar")
+	motorcar.rotation.y = mk_yaw("jcar") + PI
+	motorcar.exit_requested.connect(_leave_car)
+	_add_yard_spots()
+	player.place(mk("street_start"), _yaw_to(mk("street_start"), mk("street_start") + Vector3(1, 0, 0)))
+	player.sneaking = false
+	player.can_sneak = true
+	_play_ambience("yard")
+
+
+func _headlamps(car: Node3D) -> void:
 	for side in [-0.55, 0.55]:
 		var hl := SpotLight3D.new()
 		hl.light_color = Color("ffe0a8")
@@ -569,11 +642,29 @@ func _build_hoboken() -> void:
 		hl.spot_angle = 28.0
 		hl.position = Vector3(side, 1.12, -2.4)
 		hl.light_volumetric_fog_energy = 2.5
-		cab.add_child(hl)
-	player.place(mk("player_start"), _yaw_to(mk("player_start"), mk("rear_door")))
-	player.sneaking = true
-	player.can_sneak = true
-	_play_ambience("yard")
+		car.add_child(hl)
+
+
+func _bake_nav() -> void:
+	## the walkable ground of the yard, so the watchmen can go anywhere a man can walk
+	var nm := NavigationMesh.new()
+	nm.agent_radius = 0.5
+	nm.agent_height = 1.8
+	nm.agent_max_climb = 0.3
+	nm.agent_max_slope = 32.0
+	nm.cell_size = 0.25
+	nm.cell_height = 0.1
+	nm.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
+	nm.filter_baking_aabb = AABB(Vector3(-30.0, -0.6, -80.0), Vector3(46.0, 4.0, 108.0))
+	var src := NavigationMeshSourceGeometryData3D.new()
+	NavigationServer3D.parse_source_geometry_data(nm, src, level)
+	NavigationServer3D.bake_from_source_geometry_data(nm, src)
+	var map := level.get_world_3d().navigation_map
+	NavigationServer3D.map_set_cell_size(map, 0.25)
+	NavigationServer3D.map_set_cell_height(map, 0.1)
+	var region := NavigationRegion3D.new()
+	region.navigation_mesh = nm
+	level.add_child(region)
 
 
 func _moving_train_mats() -> Dictionary:
@@ -588,72 +679,218 @@ func _moving_train_mats() -> Dictionary:
 
 
 func _run_hoboken() -> void:
+	stage = "street"
 	begin_scene()
-	shot(mk("cam_wide"), mk("cam_wide_look"), 55.0)
+	shot(mk("cam_jekyll") + Vector3(-6.0, 1.5, 3.0), mk("jcar") + Vector3(0, 1.0, 0), 50.0)
 	await wait(hud.show_card("Hoboken, New Jersey", "The night of November 22, 1910", 3.5) - 1.0)
-	await line("", "They were told to come one at a time, as quietly as they could, and to leave their last names at home.")
-	await glide(mk("cam_watch"), mk("cam_watch_look"), 5.0)
-	hud.set_objective("Watch the Senator's car.")
-	var i := 0
-	for entry in ARRIVALS:
-		await _arrival(String(entry[0]), entry[1], i)
-		i += 1
-	# the porter goes up the train to find the conductor, leaving the rear platform
-	var porter = actors["porter"]
-	porter.walk([mk("rear_approach") + Vector3(0.6, 0, 6.0), mk("porter") + Vector3(0.8, 0, -40.0)], 1.4)
-	await line("", "The blinds were down. Only thin threads of amber light showed where the windows were.")
-	cab.visible = false
 	end_scene()
-	stage = "stealth"
-	_arm_stealth()
+	main.after_panel = _after_letter
+	main.open_panel("A letter, slipped under your door",
+		"[i]Friend,[/i]\n\n"
+		+ "Tonight seven men will board Senator Aldrich's private car in the Hoboken yards, one at a time and quiet as church mice. They are leaving their last names at home.\n\n"
+		+ "I want a photograph of every one of them before he gets aboard, and I want nobody to know it was taken.\n\n"
+		+ "The railroad's watchmen walk that yard all night with bull's-eye lanterns. Keep out of the light.\n\n"
+		+ "I'll be on River Street by the motorcar.\n\n"
+		+ "[i]J.[/i]")
+
+
+func _after_letter() -> void:
+	hud.set_objective("Find the man waiting by the motorcar on River Street.")
+	_beacon(mk("jekyll") + Vector3(0, 2.5, 0), "jekyll")
+	_add(mk("jekyll"), 2.4, "Talk to the man by the motorcar", _talk_jekyll, "jekyll")
+
+
+func _talk_jekyll() -> void:
+	_drop_interactable("jekyll")
+	_drop_beacon("jekyll")
+	var jk = actors["jekyll"]
+	jk.face_point(player.global_position)
+	_face_player_to(jk.global_position)
+	begin_scene()
+	shot(mk("cam_jekyll"), mk("cam_jekyll_look"), 42.0)
+	jk.play("Talk", 0.3)
+	await line("Jekyll", "You came. Good. Call me Jekyll. It isn't my name either, which puts me in fine company tonight.")
+	await line("Jekyll", "Seven of them, coming to the Senator's car by motor cab, one at a time. Bankers, a man from the Treasury, and the Senator himself.")
+	await line("Jekyll", "I want every face on film before it goes through that door. All seven. Miss one and the night's wasted.")
+	await line("Jekyll", "Here. A folding pocket Kodak and a fresh roll. Twelve exposures. Don't spend them on the fog.")
+	await line("Jekyll", "The railroad keeps its own men in that yard, and they carry bull's-eye lanterns. Stay out of the beam, and don't run where they can hear you.")
+	await line("Jekyll", "Take my motorcar down to the freight gate at the end of the street. The first cab is due any minute, and the train won't wait on you.")
+	jk.play("Idle", 0.3)
+	end_scene()
+	_give_camera()
+	hud.toast("You have a folding pocket Kodak.   Q to hold it up, click to take a picture, wheel to zoom.", 7.0)
+	hud.set_objective("Drive the motorcar down River Street to the yard's freight gate.")
+	_add(motorcar.global_position, 2.8, "Get in the motorcar", _get_in, "car")
+	_beacon(mk("gate_out") + Vector3(0, 2.8, 0), "gate")
+
+
+func _get_in() -> void:
+	_drop_interactable("car")
+	player.set_camera_up(false)
+	player.visible = false
+	player.enabled = false
+	player.set_physics_process(false)
+	player.global_position = motorcar.global_position + Vector3(0, -5, 0)
+	motorcar.start_driving()
+	driving = true
+	hud.set_objective("Drive down River Street to the freight gate.   W go, S brake, A and D steer, E get out.")
+
+
+func _leave_car() -> void:
+	if not driving:
+		return
+	motorcar.stop_driving()
+	driving = false
+	var right: Vector3 = motorcar.global_transform.basis.x
+	var out: Vector3 = motorcar.global_position - right * 1.7 + Vector3(0, 0.1, 0)
+	player.visible = true
+	player.enabled = true
+	player.set_physics_process(true)
+	player.place(out, motorcar.rotation.y)
+	player.cam.current = true
+	_add(motorcar.global_position, 2.8, "Get back in the motorcar", _get_in, "car")
+	if stage == "street":
+		hud.set_objective("Slip into the yard through the freight gate.")
+		_drop_beacon("gate")
+		_beacon(mk("gate_in") + Vector3(0, 2.6, 0), "gate")
+
+
+func _add_yard_spots() -> void:
+	## hiding places and ladders
+	_add(mk("hide_tarp_out"), 1.7, "Crawl under the tarp", _hide.bind("tarp"), "hide")
+	_add(mk("hide_boxcar_out"), 1.7, "Climb into the empty boxcar", _hide.bind("boxcar"), "hide")
+	_add(mk("hide_shed_out"), 1.7, "Step into the dark doorway", _hide.bind("shed"), "hide")
+	for i in 4:
+		if marks.has("ladder_%d_bottom" % i):
+			_add(mk("ladder_%d_bottom" % i), 1.1, "Climb the ladder", _climb.bind(i, true), "ladder")
+			_add(mk("ladder_%d_top" % i), 1.2, "Climb down the ladder", _climb.bind(i, false), "ladder")
+
+
+func _hide(which: String) -> void:
+	if player.hidden or _caught_busy:
+		return
+	var spot := "hide_" + which
+	var eye := {"tarp": 0.7, "boxcar": 1.5, "shed": 1.55}
+	player.hide_at(mk(spot), mk_yaw(spot) + PI, float(eye.get(which, 1.0)))
+	_add(mk(spot), 1.0, "Come out", _unhide.bind(which), "leave")
+	hud.toast("Hidden. They can't see you here, and you can still use the camera. E to come out.", 3.5)
+
+
+func _unhide(which: String) -> void:
+	if not player.hidden:
+		return
+	_drop_interactable("leave")
+	player.set_camera_up(false)
+	var spot := "hide_" + which
+	player.unhide(mk(spot + "_out"), mk_yaw(spot) + PI)
+
+
+func _climb(i: int, up: bool) -> void:
+	if player.hidden or _caught_busy or main.busy:
+		return
+	player.set_camera_up(false)
+	main.busy = true
+	player.enabled = false
+	var bottom := mk("ladder_%d_bottom" % i)
+	var top := mk("ladder_%d_top" % i)
+	# the rungs are on the end of the car, just behind the foot of the ladder
+	var foot := Vector3(bottom.x, bottom.y, bottom.z - 0.3)
+	var high := Vector3(bottom.x, top.y + 0.05, bottom.z - 0.3)
+	var over := Vector3(bottom.x + 0.2, top.y + 0.05, bottom.z - 1.0)
+	if up:
+		player.face(_yaw_to(foot, foot + Vector3(0, 0, -1)))
+		await _move_player([foot, high, over, top], 1.25)
+	else:
+		await _move_player([over, high, foot, bottom], 1.4)
+	main.busy = false
+	player.enabled = true
+
+
+func _start_mission() -> void:
+	stage = "yard"
+	_drop_interactable("car")
+	_drop_beacon("gate")
+	for g in guards:
+		g.watching = true
+	film = FILM
+	_update_item()
+	for k in MEN.keys():
+		photos.erase(String(k))
+	_boarded.clear()
+	_next_cab = 0
+	_run += 1
+	hud.mission.set_slots(7)
+	hud.set_objective("Photograph all seven men before they go into the Senator's car.   Q for the camera.")
+	hud.set_timer(_tally(MEN.keys()))
+	_set_clock(MISSION_SECONDS, "The train leaves in", _missed_train)
+	await thought("The Senator's car is the maroon one at the back of the train, with the brass rail. The cabs pull up at the platform steps.")
+
+
+func _yard_schedule() -> void:
+	## the cabs come on time whether you're ready or not
+	var elapsed := MISSION_SECONDS - _clock
+	if _next_cab < ARRIVALS.size() and elapsed >= FIRST_CAB + _next_cab * CAB_GAP:
+		_arrival_live(_next_cab, _run)
+		_next_cab += 1
 
 
 func _boarding_path() -> Array:
-	## down the platform, up the steps of the observation platform, to the rear door
-	var p := [mk("step_bottom"), mk("step_top"), mk("rear_approach")]
+	## from the platform steps to the rear of the car, then up its steps to the rear door
+	return [mk("step_bottom"), mk("step_top"), mk("rear_approach")]
+
+
+func _steps_path() -> Array:
+	var p := []
 	for k in 5:
 		p.append(mk("rear_step_%d" % k))
 	p.append(mk("rear_door"))
 	return p
 
 
-func _arrival(key: String, talk: Array, i: int) -> void:
+func _arrival_live(i: int, run: int) -> void:
+	var entry: Array = ARRIVALS[i]
+	var key := String(entry[0])
+	var talk: Array = entry[1]
 	var a = actors[key]
 	var porter = actors["porter"]
 	var spd := _speed(key)
-	# the cab rolls in from the east and stops at the foot of the platform steps
 	cab.visible = true
 	var cin := mk("cab_in")
 	var cstop := mk("cab_stop")
 	cab.global_position = cin
 	cab.rotation.y = PI / 2.0
 	await _drive(cab, cin, cstop, 3.2)
+	if run != _run or not is_instance_valid(a):
+		return
 	a.visible = true
 	a.place(cstop + Vector3(0.4, 0.0, -0.9), 0.0)
 	a.walk(_boarding_path(), spd)
 	_drive(cab, cstop, mk("cab_out"), 5.0)
-	if i == 0:
-		await glide(mk("cam_watch") + Vector3(1.5, 0.3, -2.5), mk("rear_approach") + Vector3(0, 1.2, 0), 3.0)
-	while a.is_walking() and a.global_position.distance_to(mk("rear_approach")) > 1.2 and not skipping:
-		await get_tree().process_frame
-	porter.face_point(a.global_position)
-	for t in talk:
-		await line(String(t[0]), String(t[1]))
-	# the first man up the steps, we watch from the platform
-	if i == 0 and not skipping:
-		shot(mk("cam_rear"), mk("cam_rear_look"), 48.0)
 	await until_arrived(a)
-	# the door opens, he steps in, it shuts behind him
+	if run != _run or not is_instance_valid(a):
+		return
+	porter.face_point(a.global_position)
+	a.face_point(porter.global_position)
+	for t in talk:
+		var dur: float = hud.say(String(t[0]), String(t[1]))
+		await get_tree().create_timer(dur).timeout
+		if run != _run or not is_instance_valid(a):
+			return
+	a.walk(_steps_path(), spd)
+	await until_arrived(a)
+	if run != _run or not is_instance_valid(a):
+		return
 	await _swing(rear_door, -1.35, 0.6)
 	a.walk([mk("rear_inside")], spd * 0.8)
 	await until_arrived(a)
+	if run != _run or not is_instance_valid(a):
+		return
 	a.visible = false
+	_boarded[key] = true
 	_swing(rear_door, 0.0, 0.8)
 	porter.face_yaw(-PI / 2.0)
-	if i == 0 and not skipping:
-		shot(mk("cam_watch") + Vector3(1.5, 0.3, -2.5), mk("rear_approach") + Vector3(0, 1.2, 0), 50.0)
-	if skipping:
-		cab.global_position = mk("cab_out")
+	if not photos.has(key) and (stage == "yard" or stage == "board"):
+		_yard_reset("", "", "He's aboard", "%s went in before you got his picture. Jekyll wanted all seven. Try again." % String(MEN[key]["name"]))
 
 
 func _drive(node: Node3D, from: Vector3, to: Vector3, seconds: float) -> void:
@@ -661,30 +898,40 @@ func _drive(node: Node3D, from: Vector3, to: Vector3, seconds: float) -> void:
 		node.global_position = to
 		return
 	var t := 0.0
-	while t < 1.0 and not skipping:
+	while t < 1.0 and not skipping and is_instance_valid(node):
 		t = minf(1.0, t + get_process_delta_time() / seconds)
 		var e := t * t * (3.0 - 2.0 * t)
 		node.global_position = from.lerp(to, e)
 		await get_tree().process_frame
-	node.global_position = to
+	if is_instance_valid(node):
+		node.global_position = to
 
 
-func _arm_stealth() -> void:
-	_stealth_on = true
-	for g in guards:
-		g.active = true
-	player.sneaking = true
-	hud.set_objective("Cross the tracks to the front steps of the Senator's car. Stay out of the lamplight.  (C to sneak)")
-	_set_clock(DEPART_SECONDS, "The train leaves in", _missed_train)
+func _all_seven() -> void:
+	stage = "board"
+	hud.set_objective("All seven on film. Now get aboard at the dark front steps of the Senator's car, before it pulls out.")
 	_add(mk("vestibule") + Vector3(0, 0.5, 0), 1.3, "Climb aboard", _board, "board")
-	if beacons.is_empty():
-		_beacon(mk("steps_marker"), "board")
-	await wait(1.0)
-	await thought("The front steps of the Senator's car, where the lamps don't reach. Low and slow.")
+	_beacon(mk("steps_marker"), "board")
+	await thought("Seven faces. Jekyll will want to see these. Now, how do I get on that train?")
+
+
+func _on_alarm(where: Vector3, g) -> void:
+	## one watchman calls out; the nearest other one comes to have a look too
+	var best = null
+	var bd := 26.0
+	for o in guards:
+		if o == g:
+			continue
+		var d: float = (o as Node3D).global_position.distance_to(where)
+		if d < bd:
+			bd = d
+			best = o
+	if best != null:
+		best.investigate(where)
 
 
 func _on_guard_spoke(text: String, g) -> void:
-	if _stealth_on or stage == "car_photos":
+	if stage in ["yard", "board", "car_photos"]:
 		hud.say(g.display_name, text, 2.4)
 
 
@@ -694,45 +941,64 @@ func _on_caught(g) -> void:
 	if stage == "car_photos":
 		_car_caught(g.display_name)
 		return
-	if not _stealth_on:
+	if stage != "yard" and stage != "board":
 		return
 	_yard_reset(g.display_name, "Hey! You there! Stop right where you are!", "Caught", "Nobody was meant to see this car tonight. Try again.")
 
 
 func _missed_train() -> void:
-	if _caught_busy or not _stealth_on:
+	if _caught_busy or (stage != "yard" and stage != "board"):
 		return
 	_yard_reset("The conductor", "Board!", "Too late", "The train pulled out without you. Try again, and don't dawdle.")
 
 
 func _yard_reset(who: String, shout: String, title: String, sub: String) -> void:
+	## back to the freight gate: the cabs start over, the film's fresh, the watchmen scatter
+	if _caught_busy:
+		return
 	_caught_busy = true
-	_stealth_on = false
 	_clock_on = false
+	player.set_camera_up(false)
 	for gg in guards:
 		gg.active = false
 	player.enabled = false
-	hud.say(who, shout, 2.5)
+	if shout != "":
+		hud.say(who, shout, 2.5)
 	await get_tree().create_timer(1.8).timeout
 	await hud.fade_to(1.0, 0.8).finished
-	hud.show_card(title, sub, 1.6)
-	await get_tree().create_timer(2.6).timeout
-	player.place(mk("player_start"), _yaw_to(mk("player_start"), mk("rear_door")))
+	hud.show_card(title, sub, 1.8)
+	await get_tree().create_timer(2.8).timeout
+	_run += 1
+	for k in MEN.keys():
+		var a = actors[String(k)]
+		a.visible = false
+		a.place(mk("cab_out") + Vector3(0, -30, 0), 0.0)
+	cab.visible = false
+	if rear_door:
+		rear_door.rotation.y = 0.0
+	_drop_interactable("board")
+	_drop_beacon("board")
+	_drop_interactable("leave")
+	if player.hidden:
+		player.unhide(mk("gate_in"), 0.0)
+	player.place(mk("gate_in"), 0.0)
 	player.sneaking = true
-	for g in guards:
-		g.reset_to(g.route[0], 0)
+	for k in guards.size():
+		var g = guards[k]
+		var spec: Array = WATCHMEN[k % WATCHMEN.size()]
+		g.reset_to(spots[int(spec[2]) % spots.size()] if not spots.is_empty() else g.global_position)
 		g.active = true
+		g.watching = true
 	player.enabled = true
-	_stealth_on = true
 	_caught_busy = false
-	_set_clock(DEPART_SECONDS, "The train leaves in", _missed_train)
+	_start_mission()
 	await hud.fade_to(0.0, 1.0).finished
 
 
 func _board() -> void:
-	if not _stealth_on:
+	if stage != "board" or _caught_busy:
 		return
-	_stealth_on = false
+	stage = "boarding"
 	_stop_clock()
 	_clear_beacons()
 	main.interactables.clear()
@@ -740,6 +1006,10 @@ func _board() -> void:
 		g.active = false
 	hud.set_sneak(false)
 	hud.set_objective("")
+	hud.set_timer("")
+	hud.mission.set_slots(0)
+	if player.hidden:
+		player.unhide(mk("vestibule"), 0.0)
 	begin_scene()
 	shot(mk("cam_board"), mk("cam_board_look"), 46.0)
 	player.sneaking = false
@@ -779,29 +1049,31 @@ func tick(delta: float) -> void:
 	## called from main every frame
 	var worst := 0.0
 	for g in guards:
-		if g.active:
+		if g.active and g.watching:
 			worst = maxf(worst, g.detection)
-	if _stealth_on and not _caught_busy:
+	if (stage == "yard" or stage == "board") and not _caught_busy:
 		hud.set_sneak(player.sneaking or worst > 0.05, worst)
 	elif stage == "car_photos" and not _caught_busy:
 		hud.set_sneak(worst > 0.05, worst)
+	if stage == "street" and not driving and not _caught_busy:
+		var gi := mk("gate_in")
+		if Vector2(player.global_position.x - gi.x, player.global_position.z - gi.z).length() < 2.2:
+			_start_mission()
 	if _clock_on and not _caught_busy and not in_scene:
 		_clock -= delta
-		var s := int(ceil(maxf(_clock, 0.0)))
-		var extra := ""
-		if stage == "car_photos":
-			extra = "   ·   " + _tally(CAR_PHOTOS)
-		hud.set_timer("%s %d:%02d%s" % [_clock_text, int(s / 60.0), s % 60, extra], _clock < 30.0)
+		hud.mission.set_clock(_clock_text, maxf(_clock, 0.0))
+		if stage == "yard" or stage == "board":
+			_yard_schedule()
 		if _clock <= 0.0:
 			_clock_on = false
 			if _clock_out.is_valid():
 				_clock_out.call()
 	if stage == "car_photos":
 		_car_watch()
-	if _expose_key != "":
-		_expose_tick(delta)
 	if stage == "room_photos" or stage == "room_copy":
 		_arthur_tick(delta)
+	if player.camera_up:
+		hud.mission.set_finder(film, player.zoom, not _framed_subject().is_empty())
 	var pulse := 0.22 + 0.12 * sin(Time.get_ticks_msec() * 0.003)
 	for b in beacons:
 		if is_instance_valid(b[0]):
@@ -812,84 +1084,250 @@ func tick(delta: float) -> void:
 
 
 # ================================================================== THE POCKET KODAK
-## Press E at something worth a picture and keep holding it: a time exposure by lamplight.
-## Let go too soon and the picture's spoiled. Whoever is watching gets a good look meanwhile.
-func _start_exposure(key: String) -> void:
-	if _expose_key != "" or in_scene or _caught_busy or photos.has(key):
+## An item once Jekyll hands it over: Q holds it up, the wheel zooms, a click takes the picture.
+## Whatever is nearest the middle of the viewfinder, big enough in the frame and in plain sight,
+## is what the picture is of. A subject is [key, point, size in meters, farthest it can be].
+func _give_camera() -> void:
+	player.has_camera = true
+	film = FILM
+	_update_item()
+
+
+func _update_item() -> void:
+	if player.has_camera:
+		hud.mission.set_item("Q   Pocket Kodak   ·   %d exposures left" % film)
+	else:
+		hud.mission.set_item("")
+
+
+var _exposure_before := -1.0
+
+
+func _on_camera_toggled(on: bool) -> void:
+	hud.mission.show_finder(on)
+	# through the lens your eye opens up to the dark, so the faces can be made out
+	var env: Environment = main.env
+	if on:
+		hud.mission.set_finder(film, player.zoom, false)
+		if env and _exposure_before < 0.0:
+			_exposure_before = env.tonemap_exposure
+			env.tonemap_exposure = _exposure_before * (2.2 if stage in ["yard", "board", "street"] else 1.3)
+	elif env and _exposure_before >= 0.0:
+		env.tonemap_exposure = _exposure_before
+		_exposure_before = -1.0
+
+
+func _subjects() -> Array:
+	var out := []
+	match stage:
+		"yard", "board":
+			for k in MEN.keys():
+				var key := String(k)
+				if photos.has(key) or _boarded.has(key):
+					continue
+				var a = actors.get(key)
+				if a == null or not is_instance_valid(a) or not (a as Node3D).visible:
+					continue
+				out.append([key, (a as Node3D).global_position, 1.8, 70.0])
+		"car_photos":
+			for k in CAR_PHOTOS:
+				if not photos.has(k):
+					out.append([String(k), _paper_pos(String(k)), 0.3, 2.6])
+		"room_photos":
+			if not photos.has("chalkboard"):
+				out.append(["chalkboard", mk("chalk_spot") + Vector3(-0.8, 1.2, 0.0), 1.4, 9.0])
+			if not photos.has("notes_paul"):
+				out.append(["notes_paul", mk("notes_paul"), 0.3, 2.4])
+			if not photos.has("notes_abe"):
+				out.append(["notes_abe", mk("notes_abe"), 0.3, 2.4])
+	return out
+
+
+func _framed_subject() -> Array:
+	## the subject nearest the middle of the viewfinder that's big enough and in plain sight
+	var cam: Camera3D = player.fp_cam
+	var fr: Rect2 = hud.mission.frame_rect()
+	if fr.size.y < 1.0:
+		return []
+	var right := cam.global_transform.basis.x
+	var space := cam.get_world_3d().direct_space_state
+	var best := []
+	var best_d := 1e9
+	for s in _subjects():
+		var p: Vector3 = s[1]
+		var sz: float = s[2]
+		var reach: float = s[3]
+		var mid := p + Vector3(0, sz * 0.55 if sz > 1.0 else 0.0, 0)
+		if cam.global_position.distance_to(mid) > reach or cam.is_position_behind(mid):
+			continue
+		var c2 := cam.unproject_position(mid)
+		if not fr.has_point(c2):
+			continue
+		var span := cam.unproject_position(mid + right * sz * 0.5).distance_to(cam.unproject_position(mid - right * sz * 0.5))
+		if span / fr.size.y < (0.16 if sz > 1.0 else 0.2):
+			continue
+		# in plain sight: nothing solid between the lens and it (what's behind it doesn't count)
+		var q := PhysicsRayQueryParameters3D.create(cam.global_position, mid)
+		q.exclude = [player.get_rid()]
+		var hit := space.intersect_ray(q)
+		if not hit.is_empty() and cam.global_position.distance_to(hit["position"] as Vector3) < cam.global_position.distance_to(mid) - 0.6:
+			continue
+		var d := c2.distance_to(fr.get_center())
+		if d < best_d:
+			best_d = d
+			best = s
+	return best
+
+
+func _on_shutter() -> void:
+	if not player.camera_up or _caught_busy or in_scene:
 		return
-	_expose_key = key
-	_expose_t = 0.0
-	main.busy = true
-	player.enabled = false
-	player.set_carrying(false)
-	player.set_kodak(true)
-	var target := _photo_pos(key)
-	_face_player_to(target)
-	hud.set_prompt("Hold E and keep still...")
-
-
-func _photo_pos(key: String) -> Vector3:
-	match key:
-		"chalkboard":
-			return mk("chalk_spot") + Vector3(-1.0, 1.5, 0.0)
-		"notes_paul":
-			return mk("notes_paul")
-		"notes_abe":
-			return mk("notes_abe")
-	return mk("valise") + Vector3(0.3, 0.8, 0.0)
-
-
-func _expose_tick(delta: float) -> void:
-	if not Input.is_action_pressed("interact"):
-		_end_exposure(false)
+	if film <= 0:
+		hud.toast("Out of film.", 2.0)
 		return
-	_expose_t += delta
-	hud.set_prompt("Hold still...  " + "|".repeat(int(_expose_t / EXPOSURE * 12.0)))
-	if _expose_t >= EXPOSURE:
-		_end_exposure(true)
-
-
-func _end_exposure(done: bool) -> void:
-	var key := _expose_key
-	_expose_key = ""
-	player.set_kodak(false)
-	main.busy = false
-	player.enabled = true
-	hud.set_prompt("")
-	if not done:
-		hud.toast("You moved. That one's spoiled.", 2.0)
+	film -= 1
+	_update_item()
+	var s := _framed_subject()
+	Sound.one_shot(self, "shutter", -4.0)
+	var tex := await _grab_frame()
+	hud.mission.shutter_flash()
+	if s.is_empty():
+		hud.mission.show_print(tex, "Nothing much", "Fog and lamplight. That one's wasted.", "")
+		_after_miss()
 		return
-	Sound.one_shot(self, "shutter", -6.0)
+	_record_photo(String(s[0]), tex)
+
+
+func _grab_frame() -> Texture2D:
+	## what the viewfinder saw, without the viewfinder
+	hud.visible = false
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	hud.visible = true
+	if img == null or img.is_empty():
+		return _blank_print()
+	var fr: Rect2 = hud.mission.frame_rect()
+	var vs := get_viewport().get_visible_rect().size
+	var sc := Vector2(float(img.get_width()) / vs.x, float(img.get_height()) / vs.y)
+	var r := Rect2i(Vector2i(fr.position * sc), Vector2i(fr.size * sc)).intersection(Rect2i(0, 0, img.get_width(), img.get_height()))
+	if r.size.x < 8 or r.size.y < 8:
+		return _blank_print()
+	var crop := img.get_region(r)
+	crop.resize(480, 320, Image.INTERPOLATE_BILINEAR)
+	return ImageTexture.create_from_image(crop)
+
+
+func _blank_print() -> Texture2D:
+	var img := Image.create(48, 32, false, Image.FORMAT_RGB8)
+	img.fill(Color(0.2, 0.18, 0.15))
+	return ImageTexture.create_from_image(img)
+
+
+func _record_photo(key: String, tex: Texture2D) -> void:
 	photos.append(key)
-	var info: Array = PHOTOS[key]
-	hud.toast("Photograph: " + String(info[0]), 2.5)
+	var title := ""
+	var sub := ""
+	var stamp := ""
+	var slot := -1
+	var caption := ""
+	if WHO.has(key):
+		var who: Array = WHO[key]
+		title = String(who[0])
+		sub = String(who[1])
+		var n := 0
+		for k in MEN.keys():
+			if photos.has(String(k)):
+				n += 1
+		stamp = "%d of 7" % n
+		slot = n - 1
+		caption = String(MEN[key]["name"])
+	else:
+		var info: Array = PHOTOS[key]
+		title = String(info[0])
+		sub = String(info[1])
+	hud.mission.show_print(tex, title, sub, stamp, slot, caption)
 	_after_photo(key)
 
 
 func _after_photo(key: String) -> void:
-	if stage == "car_photos":
-		_drop_interactable("valise")
-		var left := []
-		for k in CAR_PHOTOS:
-			if not photos.has(k):
-				left.append(k)
-		if left.is_empty():
-			_drop_beacon("valise")
-			_car_done()
-		else:
-			var nxt := String(left[0])
-			var info: Array = PHOTOS[nxt]
-			_add(mk("valise") + Vector3(0, 0.8, 0), 1.1, "Photograph " + String(info[0]).to_lower() + "  (hold E)", _start_exposure.bind(nxt), "valise")
-	elif stage == "room_photos":
-		_drop_interactable(key)
-		_drop_beacon(key)
-		hud.set_timer(_tally(ROOM_PHOTOS))
-		var all_done := true
-		for k in ROOM_PHOTOS:
-			if not photos.has(k):
-				all_done = false
-		if all_done:
-			_room_copy()
+	match stage:
+		"yard", "board":
+			hud.set_timer(_tally(MEN.keys()))
+			var n := 0
+			for k in MEN.keys():
+				if photos.has(String(k)):
+					n += 1
+			if n >= 7 and stage == "yard":
+				_all_seven()
+		"car_photos":
+			hud.set_timer(_tally(CAR_PHOTOS))
+			var all_done := true
+			for k in CAR_PHOTOS:
+				if not photos.has(k):
+					all_done = false
+			if all_done:
+				_drop_beacon("valise")
+				_car_done()
+		"room_photos":
+			_drop_beacon(key)
+			hud.set_timer(_tally(ROOM_PHOTOS))
+			var all_done := true
+			for k in ROOM_PHOTOS:
+				if not photos.has(k):
+					all_done = false
+			if all_done:
+				_room_copy()
+
+
+func _after_miss() -> void:
+	if film > 0:
+		return
+	match stage:
+		"yard":
+			_yard_reset("", "", "Out of film", "The roll ran out before you had all seven. Try again, and make every picture count.")
+		"car_photos":
+			_car_caught("", "The roll ran out before you had every page. Try again.")
+		"room_photos":
+			_room_caught("The roll ran out before you had it all. Try again.")
+
+
+func _paper_pos(key: String) -> Vector3:
+	## the papers spread on the lounge desk by Arthur's valise
+	var v := mk("valise")
+	match key:
+		"outline":
+			return v + Vector3(-0.05, 0.775, 0.55)
+		"figures":
+			return v + Vector3(0.17, 0.775, 0.28)
+		"panic":
+			return v + Vector3(-0.08, 0.775, 0.02)
+	return v + Vector3(0.05, 1.01, -0.3)
+
+
+func _lay_papers() -> void:
+	## loose sheets on the desk, written close, for the camera to find
+	var img := Image.create(64, 84, false, Image.FORMAT_RGB8)
+	img.fill(Color("e8dcc0"))
+	for row in range(8, 78, 5):
+		var x := 6
+		while x < 58:
+			var w := randi_range(3, 9)
+			for dx in w:
+				if x + dx < 58:
+					img.set_pixel(x + dx, row, Color("3a3024"))
+			x += w + randi_range(2, 4)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = ImageTexture.create_from_image(img)
+	mat.roughness = 0.9
+	for k in CAR_PHOTOS:
+		var mi := MeshInstance3D.new()
+		var pm := PlaneMesh.new()
+		pm.size = Vector2(0.21, 0.28)
+		mi.mesh = pm
+		mi.material_override = mat
+		mi.position = _paper_pos(String(k)) + Vector3(0, 0.003, 0)
+		mi.rotation.y = randf_range(-0.4, 0.4)
+		level.add_child(mi)
 
 
 # ================================================================== THE PRIVATE CAR
@@ -917,6 +1355,7 @@ func _build_privatecar() -> void:
 	st.patrol_speed = 1.2
 	st.visible = false
 	st.place(mk("stew_0") + Vector3(0, -20, 0), 0.0)
+	_lay_papers()
 	player.place(mk("pc_spawn"), mk_yaw("pc_spawn"))
 	player.sneaking = false
 	player.can_sneak = true
@@ -987,7 +1426,7 @@ func _jacket() -> void:
 	main.busy = false
 	hud.set_objective("Take the coffee tray from the counter.")
 	main.add_interactable(mk("tray"), 1.1, "Take the coffee tray", _tray)
-	await thought("A little big in the shoulders. And a folding pocket Kodak in the pocket. Somebody's going to want proof of this.")
+	await thought("A little big in the shoulders. Nobody looks twice at a steward, and Jekyll's Kodak fits the pocket.")
 
 
 func _tray() -> void:
@@ -1070,16 +1509,13 @@ func _arm_car() -> void:
 	st.reset_to(mk("stew_0"), 0)
 	st.active = true
 	st.watching = false
-	hud.set_objective("Photograph what's in Arthur's valise. The steward mustn't catch you back in the lounge.")
-	_set_clock(ROUNDS_SECONDS, "Lamps down in", _lamps_down)
-	_drop_interactable("valise")
+	film = 8
+	_update_item()
+	hud.set_objective("Photograph the four papers by Arthur's valise.   Q for the camera. The steward mustn't catch you back in the lounge.")
+	hud.set_timer(_tally(CAR_PHOTOS))
+	_set_clock(ROUNDS_SECONDS, "The steward turns the lamps down in", _lamps_down)
 	_clear_beacons()
-	var info: Array = PHOTOS[String(CAR_PHOTOS[0])]
-	_add(mk("valise") + Vector3(0, 0.8, 0), 1.1, "Photograph " + String(info[0]).to_lower() + "  (hold E)", _start_exposure.bind(String(CAR_PHOTOS[0])), "valise")
 	_beacon(mk("valise") + Vector3(0, 1.6, 0), "valise")
-	for k in CAR_PHOTOS:
-		if photos.has(k):
-			_after_photo(String(k))
 
 
 func _car_watch() -> void:
@@ -1099,14 +1535,13 @@ func _car_caught(who: String, sub := "The steward caught a stranger in a white j
 		return
 	_caught_busy = true
 	_clock_on = false
-	if _expose_key != "":
-		_expose_key = ""
-		player.set_kodak(false)
+	player.set_camera_up(false)
 	var st = guards[0]
 	st.active = false
 	player.enabled = false
 	main.busy = true
-	hud.say(who, "Say. Who are you? You're not with this car.", 2.5)
+	if who != "":
+		hud.say(who, "Say. Who are you? You're not with this car.", 2.5)
 	await get_tree().create_timer(1.8).timeout
 	await hud.fade_to(1.0, 0.8).finished
 	hud.show_card("Caught", sub, 1.8)
@@ -1129,7 +1564,9 @@ func _car_done() -> void:
 	for g in guards:
 		g.active = false
 	hud.set_sneak(false)
-	await thought("Four exposures. Close the valise, just the way it was.")
+	hud.set_timer("")
+	player.set_camera_up(false)
+	await thought("All four. Close the valise, just the way it was.")
 	begin_scene()
 	shot(mk("cam_lounge"), mk("cam_lounge_look"), 50.0)
 	hud.fade_to(1.0, 1.5)
@@ -1174,17 +1611,21 @@ func _run_jekyll() -> void:
 	_door_when_near()
 	await wait(2.0)
 	await thought("Live oaks and moss, and not another soul on the island.")
+	var here := level
 	for a in actors.values():
 		await until_arrived(a)
+		if level != here or not is_instance_valid(a):
+			return
 		a.visible = false
 
 
 func _door_when_near() -> void:
 	## the front door swings open as the first of them reaches the porch
 	var opened := false
-	while not opened and stage == "jekyll" and is_instance_valid(level):
+	var here := level
+	while not opened and stage == "jekyll" and level == here:
 		for a in actors.values():
-			if (a as Node3D).global_position.z < 3.0 and (a as Node3D).visible:
+			if is_instance_valid(a) and (a as Node3D).global_position.z < 3.0 and (a as Node3D).visible:
 				opened = true
 		if skipping:
 			opened = true
@@ -1285,13 +1726,12 @@ func _arm_room() -> void:
 	for k in ROOM_PHOTOS:
 		photos.erase(k)
 	have_copy = false
+	film = 8
+	_update_item()
 	_arthur_sit()
 	_clear_beacons()
-	hud.set_objective("Photograph the chalkboard and both sets of notes. Only while Arthur's head is down.")
+	hud.set_objective("Photograph the chalkboard and both sets of notes.   Q for the camera. Keep it down whenever Arthur looks up.")
 	hud.set_timer(_tally(ROOM_PHOTOS))
-	_add(mk("chalk_spot") + Vector3(0, 1.0, 0), 1.4, "Photograph the chalkboard  (hold E)", _start_exposure.bind("chalkboard"), "chalkboard")
-	_add(mk("notes_paul"), 1.3, "Photograph Paul's notes  (hold E)", _start_exposure.bind("notes_paul"), "notes_paul")
-	_add(mk("notes_abe"), 1.3, "Photograph Abe's notes  (hold E)", _start_exposure.bind("notes_abe"), "notes_abe")
 	_beacon(mk("chalk_spot") + Vector3(-0.6, 2.9, 0), "chalkboard")
 	_beacon(mk("notes_paul") + Vector3(0, 0.9, 0), "notes_paul")
 	_beacon(mk("notes_abe") + Vector3(0, 0.9, 0), "notes_abe")
@@ -1341,7 +1781,7 @@ func _arthur_tick(delta: float) -> void:
 				_arthur_sit()
 				_shot_t = randf_range(18.0, 24.0)
 	# while he looks up, a camera held up in plain view gets noticed quickly
-	var risky := _expose_key != ""
+	var risky: bool = player.camera_up
 	if _arthur_state == "looking" and risky:
 		_arthur_seen += delta * 1.7
 	else:
@@ -1360,6 +1800,7 @@ func _arthur_tick(delta: float) -> void:
 func _room_copy() -> void:
 	stage = "room_copy"
 	hud.set_timer("")
+	player.set_camera_up(false)
 	hud.set_objective("Now the clean copy, on the table by Arthur. Take it when he isn't looking, and get out the door.")
 	_add(mk("draft"), 1.3, "Take the clean copy", _take_copy, "copy")
 	_beacon(mk("draft") + Vector3(0, 0.8, 0), "copy")
@@ -1413,9 +1854,7 @@ func _room_caught(sub: String) -> void:
 	if _caught_busy:
 		return
 	_caught_busy = true
-	if _expose_key != "":
-		_expose_key = ""
-		player.set_kodak(false)
+	player.set_camera_up(false)
 	player.enabled = false
 	main.busy = true
 	hud.say("Arthur", "What on earth are you doing?", 2.2)
@@ -1448,7 +1887,12 @@ func _meeting_done() -> void:
 
 func _read_evidence() -> void:
 	var body := "[i]What you brought back from 1910. The papers are imagined; what they describe is not.[/i]\n\n"
-	body += "[b]From Arthur's valise, on the train[/b]\n"
+	body += "[b]On the platform at Hoboken[/b]\n"
+	for k in MEN.keys():
+		if photos.has(String(k)):
+			var who: Array = WHO[String(k)]
+			body += "[b]" + String(who[0]) + ".[/b] " + String(who[1]) + "\n"
+	body += "\n[b]From Arthur's valise, on the train[/b]\n"
 	for k in CAR_PHOTOS:
 		if photos.has(k):
 			var info: Array = PHOTOS[k]
@@ -1465,7 +1909,7 @@ func _read_evidence() -> void:
 	body += "Congress never passed it. Aldrich left the Senate in 1911, and by 1913 the Democrats held the House, the Senate and the White House. They were not going to pass a bill with his name on it.\n\n"
 	body += "But a good deal of it came back. The [b]Federal Reserve Act[/b], signed by President Woodrow Wilson on December 23, 1913, kept the regional idea, with twelve Reserve Banks instead of fifteen, and the elastic currency. It put a Federal Reserve Board appointed by the President over the whole thing. The Reserve Banks opened for business in November 1914.\n\n"
 	body += "For years the men kept quiet about the trip. The journalist B. C. Forbes wrote about it in 1916, and Frank Vanderlip told the story himself in 1935.\n\n"
-	body += "[i]Accounts differ on some details, including exactly who else was there. The scenes you just played are a dramatization: the lines, the photographs and the stolen copy are imagined. The meeting, the men, the cover story and the plan are not.[/i]\n\n"
+	body += "[i]Accounts differ on some details, including exactly who else was there. The scenes you just played are a dramatization: Jekyll, the lines, the photographs and the stolen copy are imagined. The meeting, the men, the cover story and the plan are not.[/i]\n\n"
 	body += main._link("present", "Walk back out into the present day")
 	main.busy = false
 	main.open_panel("The Evidence", body)
@@ -1506,16 +1950,25 @@ func shot_setup(what: String) -> void:
 			if front_door:
 				front_door.rotation.y = 1.4
 			_beacon(mk("steps_marker"), "board")
-		"valise":
-			player.place(mk("desk_stand"), 0.0)
-			player.set_outfit("waiter")
-			player.set_kodak(true)
-			_face_player_to(_photo_pos("outline"))
-		"room":
-			player.place(mk("notes_paul") + Vector3(0.6, -0.8, -0.7), 0.0)
-			player.set_carrying(false)
-			player.set_kodak(true)
-			_face_player_to(mk("notes_paul"))
+		"finder":
+			# looking through the Kodak at a man on the platform, from under the tarp
+			var n = actors["nelson"]
+			n.visible = true
+			n.place(mk("rear_approach"), -PI / 2.0)
+			player.has_camera = true
+			_give_camera()
+			stage = "yard"
+			hud.mission.set_slots(7)
+			hud.mission.set_clock("The train leaves in", 312.0)
+			hud.set_objective("Photograph all seven men before they go into the Senator's car.   Q for the camera.")
+			player.hide_at(mk("hide_tarp"), mk_yaw("hide_tarp") + PI, 0.7)
+			player.yaw = _yaw_to(mk("hide_tarp"), mk("rear_approach"))
+			player.set_camera_up(true)
+			player.fp_pitch = 0.02
+			player.zoom = 1.6
+		"jekyll":
+			stage = "street"
+			hud.set_objective("Find the man waiting by the motorcar on River Street.")
 
 
 # ------------------------------------------------------------------ a run-through for testing
@@ -1525,20 +1978,67 @@ func autotest() -> void:
 	print("AUTOTEST start")
 	start()
 	await _settle("hoboken")
+	await _until(_is_stage.bind("street"), 20.0, true)
+	await get_tree().create_timer(0.5).timeout
+	main.hud.close_panel()
+	await get_tree().create_timer(0.3).timeout
+	print("AUTOTEST on River Street: watchmen ", guards.size(), ", spots ", spots.size(), ", walkable map ", _nav_ok(), ", Jekyll ", actors.has("jekyll"))
 	skipping = true
-	await _until(_is_stage.bind("stealth"), 60.0)
-	print("AUTOTEST arrivals done, stealth armed: ", _stealth_on, ", clock ", _clock)
+	await _talk_jekyll()
+	await _until(_not_in_scene, 20.0, true)
+	skipping = false
+	print("  camera: ", player.has_camera, ", film ", film)
+	_get_in()
+	print("  driving: ", driving)
+	motorcar.global_position = mk("park")
+	await get_tree().physics_frame
+	_leave_car()
+	player.global_position = mk("gate_in")
+	await _until(_is_stage.bind("yard"), 5.0)
+	print("AUTOTEST in the yard: clock ", int(_clock), ", watchmen watching ", guards[0].watching)
+	print("  HUD root ", hud.root.size, " mission ", hud.mission.size, " finder ", hud.mission.finder.size, " frame ", hud.mission.frame_rect())
+	await get_tree().create_timer(2.0).timeout
+	var moving := 0
 	for g in guards:
-		print("  guard ", g.display_name, " at ", g.global_position)
-	print("  rear door ", rear_door != null, ", front door ", front_door != null, ", beacons ", beacons.size())
-	# a caught and a missed train, to exercise the resets
+		if g.is_walking():
+			moving += 1
+	print("  watchmen on the move: ", moving, " of ", guards.size())
+	# hide, climb, come down
+	_hide("tarp")
+	print("  hidden under the tarp: ", player.hidden, ", seen by the detective: ", guards[0].sees(player.global_position, true))
+	_unhide("tarp")
+	skipping = true
+	await _climb(0, true)
+	print("  up the boxcar ladder, standing at height %.1f" % player.global_position.y)
+	await _climb(0, false)
+	skipping = false
+	# a watchman catches you: back to the gate, the cabs start over
 	_on_caught(guards[0])
 	await _until(_not_caught, 15.0)
-	print("AUTOTEST caught reset, clock back to ", int(_clock))
-	_missed_train()
-	await _until(_not_caught, 15.0)
+	print("AUTOTEST caught reset: clock ", int(_clock), ", photos ", photos.size(), ", film ", film)
+	# a man walks up the platform; hold the camera on him
+	_clock = MISSION_SECONDS - FIRST_CAB - 0.2
+	await _until(_man_visible.bind("nelson"), 10.0)
+	await get_tree().create_timer(3.0).timeout
+	var n = actors["nelson"]
+	player.global_position = n.global_position + Vector3(-9.0, 0.0, 0.0)
+	player.yaw = _yaw_to(player.global_position, n.global_position)
+	player.set_camera_up(true)
+	player.fp_pitch = -0.05
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var framed := _framed_subject()
+	print("  framed in the viewfinder: ", framed[0] if not framed.is_empty() else "nobody")
+	if framed.is_empty():
+		var cam: Camera3D = player.fp_cam
+		var mid: Vector3 = (n as Node3D).global_position + Vector3(0, 1.0, 0)
+		print("    frame ", hud.mission.frame_rect(), " man at ", cam.unproject_position(mid), " behind ", cam.is_position_behind(mid), " cam ", cam.global_position, " current ", cam.current, " vp ", get_viewport().get_visible_rect().size)
+	player.set_camera_up(false)
+	for k in MEN.keys():
+		if not photos.has(String(k)):
+			_record_photo(String(k), _blank_print())
+	print("AUTOTEST all seven: stage ", stage, ", photos ", photos.size())
 	player.global_position = mk("vestibule")
-	await get_tree().create_timer(0.5).timeout
 	_board()
 	skipping = true
 	await _settle("privatecar")
@@ -1553,17 +2053,29 @@ func autotest() -> void:
 		skipping = true
 		await _serve(key)
 	await _until(_is_stage.bind("car_photos"), 30.0, true)
-	print("AUTOTEST car photos armed, steward active: ", guards[0].active)
+	print("AUTOTEST car photos armed, steward active: ", guards[0].active, ", film ", film)
 	player.global_position = mk("desk_stand")
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 	_car_watch()
 	print("  steward minds the lounge: ", guards[0].watching)
+	player.yaw = _yaw_to(player.global_position, _paper_pos("outline"))
+	player.set_camera_up(true)
+	player.fp_pitch = -0.9
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var fr2 := _framed_subject()
+	print("  framed on the desk: ", fr2[0] if not fr2.is_empty() else "nothing")
+	if fr2.is_empty():
+		var cam2: Camera3D = player.fp_cam
+		for s in _subjects():
+			var p2: Vector3 = s[1]
+			print("    ", s[0], " at ", p2, " dist %.2f" % cam2.global_position.distance_to(p2), " screen ", cam2.unproject_position(p2), " behind ", cam2.is_position_behind(p2), " cam ", cam2.global_position, " player ", player.global_position)
+	player.set_camera_up(false)
 	_car_caught("The steward")
 	await _until(_not_caught, 15.0)
 	for k in CAR_PHOTOS:
-		_expose_key = String(k)
-		_end_exposure(true)
+		_record_photo(String(k), _blank_print())
 	skipping = true
 	await _settle("jekyll")
 	print("AUTOTEST on Jekyll, men: ", actors.size(), ", photos ", photos.size())
@@ -1576,10 +2088,9 @@ func autotest() -> void:
 	skipping = true
 	await _pour("nelson")
 	await _until(_is_stage.bind("room_photos"), 40.0, true)
-	print("AUTOTEST room photos armed")
+	print("AUTOTEST room photos armed, film ", film)
 	for k in ROOM_PHOTOS:
-		_expose_key = String(k)
-		_end_exposure(true)
+		_record_photo(String(k), _blank_print())
 	print("AUTOTEST stage ", stage)
 	skipping = true
 	await _arthur_to_window()
@@ -1590,8 +2101,20 @@ func autotest() -> void:
 	print("AUTOTEST evidence panel open: ", main.ui_open)
 	on_link("present")
 	await get_tree().create_timer(3.0).timeout
-	print("AUTOTEST done, progress: ", main.progress.get("ch1910", false), ", photos ", photos.size())
+	print("AUTOTEST done, progress: ", main.progress.get("ch1910", false), ", photos ", photos.size(), ", camera put away: ", not player.has_camera)
 	get_tree().quit()
+
+
+func _man_visible(key: String) -> bool:
+	return (actors[key] as Node3D).visible
+
+
+func _nav_ok() -> bool:
+	if spots.size() < 2:
+		return false
+	var map := level.get_world_3d().navigation_map
+	var pts := NavigationServer3D.map_get_path(map, spots[0], spots[spots.size() - 2], true)
+	return pts.size() >= 2
 
 
 func _is_stage(s: String) -> bool:
@@ -1627,111 +2150,66 @@ func _until(cond: Callable, timeout: float, skip := false) -> void:
 
 
 ## godot --headless --path godot -- --stealthtest
-## A careful simulated player: waits in the shadows at the start of each stretch until no
-## watchman is near it or looking its way, then sneaks the whole stretch. Reports detection
-## along the way. Then a careless run in the open.
+## Watches the yard's watchmen for a minute from under the tarp: how far they roam, how well they
+## spread out, whether a hidden player stays hidden. Then stands up in a lantern beam to be sure
+## that gets you caught.
 func stealthtest() -> void:
 	start()
 	await _settle("hoboken")
-	skipping = true
-	await _until(_is_stage.bind("stealth"), 120.0)
+	await _until(_is_stage.bind("street"), 20.0, true)
 	await get_tree().create_timer(0.5).timeout
-	# Blender (x, y) points, converted to Godot (x, 0, -y); each stretch starts somewhere dark
-	var legs := [
-		[Vector2(-14.2, -21.0), Vector2(-13.8, -12.0)],
-		[Vector2(-13.8, -12.0), Vector2(-13.6, -3.0), Vector2(-13.4, 2.0)],
-		[Vector2(-13.4, 2.0), Vector2(-12.4, 9.5), Vector2(-9.0, 13.2), Vector2(-7.0, 15.4), Vector2(-6.2, 16.6)],
-		[Vector2(-6.2, 16.6), Vector2(-5.2, 13.4), Vector2(-2.0, 12.0), Vector2(0.4, 10.2), Vector2(1.0, 8.6)],
-	]
+	main.hud.close_panel()
+	skipping = true
+	await _talk_jekyll()
+	await _until(_not_in_scene, 20.0, true)
+	skipping = false
+	player.global_position = mk("gate_in")
+	await _until(_is_stage.bind("yard"), 5.0)
+	_next_cab = 99
 	var caught_count := [0]
 	for g in guards:
 		g.caught.connect(_count_caught.bind(caught_count))
-	player.sneaking = true
-	player.enabled = false
-	var t0 := Time.get_ticks_msec()
+	_hide("tarp")
+	var visited := {}
+	var near_sum := 0.0
+	var near_min := 1e9
+	var samples := 0
+	var t := 0.0
 	var peak := 0.0
-	var y: float = player.global_position.y
-	for li in legs.size():
-		var pts := []
-		for v in legs[li]:
-			pts.append(Vector3(v.x, y, -v.y))
-		var start_at: Vector3 = pts[0]
-		var waited := 0.0
-		while waited < 60.0:
-			var clear := true
+	while t < 60.0:
+		await get_tree().physics_frame
+		t += get_physics_process_delta_time()
+		for g in guards:
+			peak = maxf(peak, g.detection)
+			for i in spots.size():
+				if (g as Node3D).global_position.distance_to(spots[i]) < 1.5:
+					visited[i] = true
+		if int(t * 4.0) != int((t - get_physics_process_delta_time()) * 4.0):
 			for g in guards:
-				if not _leg_clear(g, pts):
-					clear = false
-			if clear:
-				break
-			player.global_position = start_at
-			player.noise = 0.0
-			await get_tree().physics_frame
-			waited += get_physics_process_delta_time()
-			for g in guards:
-				peak = maxf(peak, g.detection)
-		for k in range(1, pts.size()):
-			var a3: Vector3 = pts[k - 1]
-			var b3: Vector3 = pts[k]
-			var dist := a3.distance_to(b3)
-			var tt := 0.0
-			while tt < dist / 1.35:
-				tt += get_physics_process_delta_time()
-				var p := a3.lerp(b3, clampf(tt * 1.35 / dist, 0.0, 1.0))
-				player.global_position = Vector3(p.x, y, p.z)
-				player.noise = 0.08
-				for g in guards:
-					peak = maxf(peak, g.detection)
-				await get_tree().physics_frame
-		print("STEALTH stretch ", li + 1, " done after waiting %.1fs, peak detection %.2f, caught %d, clock %d" % [waited, peak, caught_count[0], int(_clock)])
-	var closest := 1e9
-	for g in guards:
-		if g.display_name == "The night watchman":
-			for pt in g.route:
-				for li in 3:
-					for k in range(1, (legs[li] as Array).size()):
-						var a2: Vector2 = legs[li][k - 1]
-						var b2: Vector2 = legs[li][k]
-						closest = minf(closest, _seg_dist(pt, Vector3(a2.x, 0, -a2.y), Vector3(b2.x, 0, -b2.y)))
-	print("STEALTH careful run: %.0fs, peak %.2f, caught %d" % [(Time.get_ticks_msec() - t0) / 1000.0, peak, caught_count[0]])
-	print("STEALTH night watchman's round keeps %.1f m off the way through the crates" % closest)
-	print("STEALTH reached vestibule: ", player.global_position.distance_to(mk("vestibule")) < 1.4)
-	# careless: stand up and walk down the middle of track A under the detective's nose
-	_caught_busy = false
-	_stealth_on = true
-	for g in guards:
-		g.reset_to(g.global_position)
-		g.active = true
+				var nd := 1e9
+				for o in guards:
+					if o != g:
+						nd = minf(nd, (g as Node3D).global_position.distance_to((o as Node3D).global_position))
+				near_sum += nd
+				near_min = minf(near_min, nd)
+				samples += 1
+	print("STEALTH watchmen reached %d of %d places in a minute" % [visited.size(), spots.size()])
+	print("STEALTH nearest other watchman: %.1f m on average, %.1f m at the closest" % [near_sum / maxf(samples, 1.0), near_min])
+	print("STEALTH hidden under the tarp for a minute: peak notice %.2f, caught %d" % [peak, caught_count[0]])
+	_unhide("tarp")
+	# careless: stand up in a watchman's lantern beam
+	var g0 = guards[0]
+	var y := g0.look_yaw() as float
 	player.sneaking = false
-	var det = guards[0]
-	player.global_position = det.global_position + Vector3(sin(det.model.rotation.y), 0, cos(det.model.rotation.y)) * 6.0
+	player.global_position = (g0 as Node3D).global_position + Vector3(sin(y), 0.0, cos(y)) * 7.0
 	var before: int = caught_count[0]
 	var w := 0.0
 	while w < 8.0 and caught_count[0] == before:
-		player.noise = 0.35
 		await get_tree().physics_frame
 		w += get_physics_process_delta_time()
-	print("STEALTH careless run caught: ", caught_count[0] > before, " after %.1fs" % w)
+		player.global_position = (g0 as Node3D).global_position + Vector3(sin(g0.look_yaw()), 0.0, cos(g0.look_yaw())) * 7.0
+	print("STEALTH standing in the lantern beam, caught: ", caught_count[0] > before, " after %.1fs" % w)
 	get_tree().quit()
-
-
-func _leg_clear(g, pts: Array) -> bool:
-	## a watchman is no threat to a stretch if he's well away from it, or not looking its way
-	var gp: Vector3 = g.global_position
-	var near := 1e9
-	for k in range(1, pts.size()):
-		near = minf(near, _seg_dist(gp, pts[k - 1], pts[k]))
-	if near < 7.0:
-		return false
-	if near > 15.0:
-		return true
-	var fwd := Vector3(sin(g.model.rotation.y), 0.0, cos(g.model.rotation.y))
-	for p in pts:
-		var to: Vector3 = (p as Vector3) - gp
-		to.y = 0.0
-		if acos(clampf(fwd.dot(to.normalized()), -1.0, 1.0)) < deg_to_rad(80.0):
-			return false
-	return true
 
 
 func _count_caught(box: Array) -> void:
