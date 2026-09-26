@@ -14,6 +14,7 @@ const NpcScript := preload("res://scripts/npc.gd")
 const Look := preload("res://scripts/look.gd")
 const Foliage := preload("res://scripts/foliage.gd")
 const ChapterScript := preload("res://scripts/chapter1910.gd")
+const RoomsScript := preload("res://scripts/rooms.gd")
 const Sound := preload("res://scripts/sound.gd")
 const CHAPTER_LEVELS := ["hoboken", "privatecar", "jekyll", "meeting"]
 const PostShader := preload("res://shaders/post.gdshader")
@@ -52,6 +53,8 @@ var quality := 2
 var light_gain := 1.0
 var shot: Dictionary = {}
 var chapter: Node
+var rooms: Node
+var after_panel: Callable = Callable()
 var ambience: AudioStreamPlayer
 var gave_ticket := false
 
@@ -77,6 +80,11 @@ func _ready() -> void:
 	chapter.main = self
 	chapter.hud = hud
 	chapter.player = player
+	rooms = RoomsScript.new()
+	add_child(rooms)
+	rooms.main = self
+	rooms.hud = hud
+	rooms.player = player
 	ambience = AudioStreamPlayer.new()
 	ambience.volume_db = -10.0
 	add_child(ambience)
@@ -197,7 +205,7 @@ func go_to(level_name: String, pos: Vector3, facing: float) -> void:
 	await hud.fade_to(1.0, 0.45).finished
 	_build_level(level_name)
 	var story := CHAPTER_LEVELS.has(level_name)
-	if not story:
+	if not story and pos != Vector3.INF:
 		player.place(pos, facing)
 	await get_tree().create_timer(0.2).timeout
 	player.enabled = true
@@ -231,6 +239,18 @@ func _build_level(level_name: String) -> void:
 			_build_lobby()
 		"library":
 			_build_library()
+		"honey":
+			rooms.level = level
+			rooms.build_honey()
+			player.place(rooms.mk("hy_spawn"), 0.0)
+		"studio":
+			rooms.level = level
+			rooms.build_studio()
+			player.place(rooms.mk("dr_spawn"), 0.0)
+		"trading":
+			rooms.level = level
+			rooms.build_trading()
+			player.place(rooms.mk("tf_spawn"), 0.0)
 
 
 func _instance(path: String, extra := {}) -> Node3D:
@@ -401,9 +421,9 @@ func _build_lobby() -> void:
 	add_interactable(Vector3(-6.5, 1.0, -12.8), 1.9, "Read the notice board", _on_notices)
 	add_interactable(Vector3(6.45, 1.0, -12.8), 1.9, "Look at the framed prints", _on_prints)
 	add_interactable(Vector3(-9.0, 1.0, -4.0), 1.2, "Go into the Library", _enter_library)
-	add_interactable(Vector3(-9.0, 1.0, -10.0), 1.2, "The Trading Floor", _door_trading)
-	add_interactable(Vector3(9.0, 1.0, -4.0), 1.2, "The Drafting Room", _door_studio)
-	add_interactable(Vector3(9.0, 1.0, -10.0), 1.2, "The Honey House", _door_honey)
+	add_interactable(Vector3(-9.0, 1.0, -10.0), 1.2, "Go into the Trading Floor", _door_trading)
+	add_interactable(Vector3(9.0, 1.0, -4.0), 1.2, "Go into the Drafting Room", _door_studio)
+	add_interactable(Vector3(9.0, 1.0, -10.0), 1.2, "Go into the Honey House", _door_honey)
 
 
 func _exit_to_porch() -> void:
@@ -417,19 +437,23 @@ func _enter_library() -> void:
 
 
 func _door_trading() -> void:
-	_room_door("The Trading Floor", "Green and amber screens, the ticker along the wall, the NO COURSE plaque, and the pre-market check-in terminal. The leaderboard and the journal stay behind members-only doors.")
+	go_to("trading", Vector3.INF, 0.0)
+	hud.show_location("The Trading Floor", "Jekyll Island Trading")
 
 
 func _door_studio() -> void:
-	_room_door("The Drafting Room", "Jekyll Studio. Your live sites framed on the wall, the pricing chalkboard, the drafting table, and a drawer marked 1997.")
+	go_to("studio", Vector3.INF, 0.0)
+	hud.show_location("The Drafting Room", "Jekyll Studio")
 
 
 func _door_honey() -> void:
-	_room_door("The Honey House", "Jekyll's 40 Acre Farm. The hive out back you can open and pull a frame from, the shelf of raw honey, and the bee removal clipboard.")
+	go_to("honey", Vector3.INF, 0.0)
+	hud.show_location("The Honey House", "Jekyll's 40 Acre Farm")
 
 
-func _room_door(title: String, text: String) -> void:
-	open_panel(title, text + "\n\n[i]This door opens in the next build.[/i]")
+func _exit_room(pos: Vector3, yaw: float) -> void:
+	go_to("lobby", pos, yaw)
+	hud.show_location("The Grand Lobby", "The Jekyll Island Club")
 
 
 func _desk_ticket() -> void:
@@ -518,6 +542,10 @@ func _on_panel_closed() -> void:
 	ui_open = false
 	player.enabled = true
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	if after_panel.is_valid():
+		var cb := after_panel
+		after_panel = Callable()
+		cb.call()
 
 
 func _process(delta: float) -> void:
@@ -637,6 +665,8 @@ func _on_link(meta: String) -> void:
 		chapter.start()
 		return
 	if chapter.on_link(meta):
+		return
+	if rooms.on_link(meta):
 		return
 	var parts := meta.split(":")
 	match parts[0]:

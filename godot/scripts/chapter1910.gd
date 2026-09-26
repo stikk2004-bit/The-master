@@ -14,6 +14,7 @@ const GuardScript := preload("res://scripts/guard.gd")
 const Sound := preload("res://scripts/sound.gd")
 const Look := preload("res://scripts/look.gd")
 const Foliage := preload("res://scripts/foliage.gd")
+const Markers := preload("res://scripts/markers.gd")
 
 const MEN := {
 	"nelson": {"model": "res://models/npc_aldrich.glb", "name": "Nelson"},
@@ -34,7 +35,6 @@ const ARRIVALS := [
 	["harry", [["Harry", "Is Orville aboard yet?"], ["The porter", "Sir?"], ["Harry", "Never mind. He'll know who I mean."]]],
 	["ben", [["Nelson", "That's all of us. Ben, get in out of the cold."], ["Nelson", "Tell the conductor we're ready."]]],
 ]
-const LAMP_REACH := {"gas": 7.5, "yard": 9.0, "street": 9.0, "window": 6.0, "lantern": 4.0, "clock": 0.0, "red": 2.5, "blinds": 0.0, "coach": 0.0, "headlamp": 12.0, "firebox": 3.0}
 
 var main
 var hud
@@ -165,54 +165,13 @@ func mk(name: String) -> Vector3:
 
 
 func mk_yaw(name: String) -> float:
-	var t: Transform3D = marks.get(name, Transform3D.IDENTITY)
-	# Blender empties face their local +Y; in Godot that is -Z after the axis swap
-	var f := -t.basis.z
-	return atan2(f.x, f.z)
+	return Markers.yaw_of(marks.get(name, Transform3D.IDENTITY))
 
 
 func _dress(root: Node) -> void:
-	## Turn Blender's LIGHT_ and MARK_ empties into lights and named positions.
-	for n in root.find_children("*", "Node3D", true, false):
-		var nm := String(n.name)
-		if nm.begins_with("MARK_"):
-			# Blender numbers repeated names (seat_frank.001); the game wants the plain name
-			var key := nm.substr(5).split(".")[0]
-			if key.length() > 4 and key[key.length() - 4] == "_" and key.right(3).is_valid_int():
-				key = key.left(key.length() - 4)
-			marks[key] = (n as Node3D).global_transform
-		elif nm.begins_with("LIGHT_"):
-			var parts := nm.split("_")
-			var kind := parts[1] if parts.size() > 1 else "gas"
-			var p := (n as Node3D).global_position
-			_light(kind, p, int(parts[2]) if parts.size() > 2 and parts[2].is_valid_int() else 0)
-
-
-func _light(kind: String, p: Vector3, idx: int) -> void:
-	var spec: Array = {
-		"gas": ["ffb060", 1.5, 8.0, idx % 3 == 0],
-		"yard": ["ffae58", 1.8, 10.0, true],
-		"street": ["ffb060", 1.7, 10.0, true],
-		"window": ["ffa850", 0.9, 7.0, false],
-		"clock": ["fff0d0", 0.6, 9.0, false],
-		"lantern": ["ffb060", 0.9, 5.0, false],
-		"red": ["ff2010", 0.7, 3.0, false],
-		"headlamp": ["ffe8b8", 3.0, 16.0, false],
-		"firebox": ["ff7020", 1.6, 5.0, false],
-		"blinds": ["ffa850", 1.0, 5.0, false],
-		"coach": ["ffae60", 0.4, 7.0, false],
-		"sconce": ["ffc070", 0.9, 4.5, false],
-		"ceiling": ["ffd090", 1.1, 6.0, true],
-		"chandelier": ["ffd090", 1.5, 9.0, true],
-		"fire": ["ff8a30", 2.4, 8.0, true],
-		"daylight": ["c8d4dc", 1.2, 7.0, false],
-		"stove": ["ff7a30", 0.9, 3.5, false],
-	}.get(kind, ["ffb060", 1.0, 6.0, false])
-	var l: OmniLight3D = main._omni(p, Color(String(spec[0])), float(spec[1]), float(spec[2]), kind in ["gas", "yard", "street", "fire", "lantern", "stove", "sconce"], bool(spec[3]))
-	if LAMP_REACH.has(kind) and LAMP_REACH[kind] > 0.0:
-		lamp_list.append([p, float(LAMP_REACH[kind])])
-	if kind == "fire":
-		l.light_volumetric_fog_energy = 2.5
+	## Blender's LIGHT_ and MARK_ empties become lights and named positions
+	var found: Dictionary = Markers.dress(root, main, lamp_list)
+	marks.merge(found, true)
 
 
 func _load(path: String, extra := {}) -> Node3D:

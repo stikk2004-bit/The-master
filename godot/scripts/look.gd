@@ -137,6 +137,45 @@ const MATS := {
 	"JK_Rug": ["rug", 3.0, {"orig": false, "bright": 0.6, "desat": 0.2, "grime": 0.0}],
 	"JK_Book": ["leather", 0.3, {"grime": 0.0}],
 	"JK_Gun": ["wood_dark", 0.5, {"grime": 0.0}],
+	# ----- the Honey House
+	"HY_Planks": ["wood_planks", 2.4, {"tint": "#b08a60", "vgrain": true, "grime": 0.3}],
+	"HY_Floor": ["wood_planks", 2.6, {"orig": false, "bright": 0.9}],
+	"HY_Porch": ["wood_porch", 2.6, {"orig": false}],
+	"HY_Beam": ["rough_timber", 1.2, {"tint": "#8a6a4a"}],
+	"HY_Tin": ["tin_roof", 2.0, {"orig": false, "grime": 0.0}],
+	"HY_HiveWhite": ["painted_wood", 0.8, {"desat": 0.1, "grime": 0.2}],
+	"HY_HiveTop": ["iron_clean", 0.6, {"orig": false, "tint": "#b0b0ac", "grime": 0.0}],
+	"HY_Comb": ["honeycomb", 0.18, {"orig": false, "grime": 0.0, "obj": true}],
+	"HY_Lid": ["brass", 0.2, {"orig": false, "grime": 0.0}],
+	"HY_Steel": ["iron_clean", 0.8, {"tint": "#c8c8c4", "grime": 0.1}],
+	"HY_Iron": ["iron", 0.6, {"orig": false}],
+	"HY_Block": ["concrete", 0.6, {}],
+	"HY_Veil": ["linen", 0.3, {"grime": 0.0}],
+	"HY_Straw": ["straw", 0.3, {"orig": false, "grime": 0.0}],
+	"HY_Ground": ["grass_ground", 5.0, {"orig": false, "bright": 0.5, "grime": 0.0}],
+	# ----- the Drafting Room
+	"DR_Walnut": ["wood_dark", 1.0, {"nstr": 0.4}],
+	"DR_Plaster": ["plaster", 3.0, {"desat": 0.1, "grime": 0.2, "nstr": 0.6}],
+	"DR_Floor": ["parquet", 2.4, {"orig": false, "bright": 0.8}],
+	"DR_Ceiling": ["plaster", 3.0, {"grime": 0.0}],
+	"DR_Gilt": ["brass", 0.3, {"orig": false, "grime": 0.0}],
+	"DR_Brass": ["brass", 0.3, {"orig": false, "grime": 0.0}],
+	"DR_Leather": ["leather", 0.4, {"grime": 0.0}],
+	"DR_Paper": ["paper", 0.3, {"grime": 0.0}],
+	"DR_Book": ["leather", 0.3, {"grime": 0.0}],
+	"DR_Steel": ["iron_clean", 0.4, {"grime": 0.0}],
+	"DR_Pot": ["red_clay", 0.6, {}],
+	"DR_Plant": ["palmetto", 0.5, {"orig": false, "grime": 0.0}],
+	# ----- the Trading Floor
+	"TF_Wall": ["wood_dark", 1.2, {"nstr": 0.4, "bright": 0.9}],
+	"TF_Floor": ["wood_planks", 2.8, {"orig": false, "bright": 0.45}],
+	"TF_Ceiling": ["plaster_dark", 3.0, {"grime": 0.0, "bright": 0.6}],
+	"TF_Desk": ["wood_dark", 1.0, {"nstr": 0.4}],
+	"TF_Bezel": ["painted_metal", 0.8, {"nstr": 0.3, "grime": 0.1}],
+	"TF_Metal": ["iron_clean", 0.6, {"grime": 0.0}],
+	"TF_Brass": ["brass", 0.3, {"orig": false, "grime": 0.0}],
+	"TF_Leather": ["leather", 0.4, {"grime": 0.0}],
+	"TF_Rug": ["wool", 1.0, {"grime": 0.0}],
 }
 
 ## Glowing Blender materials: [color, emission energy]
@@ -171,6 +210,24 @@ const IMG := {
 	"HB_Clock": ["clock_face.png", 0.5],
 	"JK_Window": ["marsh_window.png", 1.3],
 	"JK_Chalkboard": ["chalkboard_1910.png", 0.0],
+	"HY_Label": ["honey_label.jpg", 0.0],
+	"HY_Logo": ["bees_logo.png", 0.0],
+	"HY_Sky": ["farm_dusk.png", 1.3],
+	"HY_Clipboard": ["clipboard_bees.png", 0.0],
+	"DR_Pricing": ["pricing_chalk.png", 0.0],
+	"DR_Blueprint": ["blueprint.png", 0.0],
+	"DR_Work_roots": ["work_roots.jpg", 0.45],
+	"DR_Work_gogit": ["work_go-git-er.jpg", 0.45],
+	"DR_Work_tinytides": ["work_tinytides.jpg", 0.45],
+	"DR_Work_zv": ["work_zv.jpg", 0.45],
+	"DR_Work_prscms": ["work_pearl-river.jpg", 0.45],
+	"DR_Work_farm": ["work_40-acre.jpg", 0.45],
+	"TF_Plaque": ["plaque_no_course.png", 0.0],
+	"TF_ScreenCheckin": ["screen_checkin.png", 1.4],
+	"TF_ScreenJournal": ["screen_journal.png", 1.4],
+	"TF_ScreenPartner": ["screen_partner.png", 1.4],
+	"TF_ScreenMembers": ["screen_members.png", 1.4],
+	"TF_Ticker": ["ticker.png", 1.5],
 }
 
 static var _tex := {}
@@ -346,7 +403,7 @@ static func apply(root: Node, extra := {}, object_space := false) -> void:
 			mi.set_surface_override_material(i, make(String(spec[0]), float(spec[1]), opts, orig))
 
 
-static func _picture(nm: String) -> StandardMaterial3D:
+static func _picture(nm: String) -> Material:
 	var key := "img|" + nm
 	if _made.has(key):
 		return _made[key]
@@ -360,6 +417,18 @@ static func _picture(nm: String) -> StandardMaterial3D:
 		m.emission_enabled = true
 		m.emission_texture = tex
 		m.emission_energy_multiplier = float(spec[1])
+	if nm == "TF_Ticker":
+		# the ticker crawls along by itself
+		var sm := ShaderMaterial.new()
+		var sh := Shader.new()
+		sh.code = "shader_type spatial;\nrender_mode unshaded;\nuniform sampler2D tex : source_color, repeat_enable, filter_linear_mipmap;\nuniform float speed = 0.035;\nvoid fragment() {\n\tvec3 c = texture(tex, vec2(UV.x + TIME * speed, UV.y)).rgb;\n\tALBEDO = c;\n\tEMISSION = c * 1.3;\n}"
+		sm.shader = sh
+		sm.set_shader_parameter("tex", tex)
+		_made[key] = sm
+		return sm
+	if nm == "HY_Logo":
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		m.alpha_scissor_threshold = 0.3
 	if nm == "HB_Skyline":
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 		m.alpha_scissor_threshold = 0.5
@@ -419,6 +488,36 @@ const PRESETS := {
 		"depth_fog": {"on": false},
 		"grade": {"shadow": Color(0.9, 0.97, 1.04), "high": Color(1.08, 0.99, 0.87), "sat": 0.86, "contrast": 1.1, "lift": 0.006},
 		"exposure": 1.5, "glow": 0.65, "gain": 1.8,
+	},
+	# the Honey House: lantern light and the last of the sun through the screen
+	"honey": {
+		"bg": "050403",
+		"sun": {"on": false},
+		"ambient": {"source": "color", "color": "6a4a28", "energy": 0.55},
+		"fog": {"density": 0.02, "albedo": "b08a58", "emission": "000000", "aniso": 0.6, "length": 40.0, "sky_affect": 0.0},
+		"depth_fog": {"on": false},
+		"grade": {"shadow": Color(0.92, 0.96, 1.0), "high": Color(1.1, 0.98, 0.82), "sat": 0.9, "contrast": 1.08, "lift": 0.006},
+		"exposure": 1.5, "glow": 0.7, "gain": 1.8,
+	},
+	# the Drafting Room: a warm study
+	"studio": {
+		"bg": "050403",
+		"sun": {"on": false},
+		"ambient": {"source": "color", "color": "5a4a38", "energy": 0.5},
+		"fog": {"density": 0.015, "albedo": "a08a6c", "emission": "000000", "aniso": 0.6, "length": 40.0, "sky_affect": 0.0},
+		"depth_fog": {"on": false},
+		"grade": {"shadow": Color(0.9, 0.97, 1.04), "high": Color(1.07, 0.99, 0.88), "sat": 0.88, "contrast": 1.1, "lift": 0.006},
+		"exposure": 1.5, "glow": 0.6, "gain": 1.8,
+	},
+	# the Trading Floor: dark, screen glow, one lamp on the plaque
+	"trading": {
+		"bg": "020303",
+		"sun": {"on": false},
+		"ambient": {"source": "color", "color": "2a3430", "energy": 0.4},
+		"fog": {"density": 0.025, "albedo": "70807a", "emission": "000000", "aniso": 0.55, "length": 40.0, "sky_affect": 0.0},
+		"depth_fog": {"on": false},
+		"grade": {"shadow": Color(0.86, 1.0, 0.96), "high": Color(1.06, 0.99, 0.9), "sat": 0.85, "contrast": 1.14, "lift": 0.004},
+		"exposure": 1.5, "glow": 0.8, "gain": 1.8,
 	},
 	# Hoboken, 1910, a November night: cold moon through overcast, coal smoke, gas lamps
 	"night1910": {

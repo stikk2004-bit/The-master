@@ -73,6 +73,7 @@ class MB:
         self.bm = bmesh.new()
         self.uv = self.bm.loops.layers.uv.new("UVMap")
         self.mats = []
+        self.facing = []   # (face, intended normal) for flat pictures and panels
 
     def _mi(self, m):
         if m not in self.mats:
@@ -137,6 +138,9 @@ class MB:
         if uv:
             for lp, t in zip(f.loops, uv):
                 lp[self.uv].uv = t
+        # remember which way the points were wound, so normal fixing can't turn it around
+        f.normal_update()
+        self.facing.append((f, f.normal.copy()))
         return f
 
     def lathe(self, center, profile, m, seg=24, caps=True):
@@ -192,8 +196,15 @@ class MB:
         self.boxc(c, (max(s.x, 0.01), max(s.y, 0.01), max(s.z, 0.01)), m)
 
     def obj(self, name, collection, smooth=False, loc=(0, 0, 0), autosmooth=False):
-        bmesh.ops.remove_doubles(self.bm, verts=self.bm.verts, dist=1e-5)
-        bmesh.ops.recalc_face_normals(self.bm, faces=self.bm.faces)
+        loose = {f for f, _ in self.facing}
+        solid = [f for f in self.bm.faces if f not in loose]
+        bmesh.ops.recalc_face_normals(self.bm, faces=solid)
+        for f, n in self.facing:
+            if f.is_valid:
+                f.normal_update()
+                if f.normal.dot(n) < 0:
+                    f.normal_flip()
+        bmesh.ops.remove_doubles(self.bm, verts=[v for v in self.bm.verts if not any(f in loose for f in v.link_faces)], dist=1e-5)
         me = bpy.data.meshes.new(name)
         self.bm.to_mesh(me)
         self.bm.free()
@@ -245,14 +256,15 @@ def new_scene(name):
     return sc
 
 
-def export(sc, fname):
+def export(sc, fname, images=True):
+    """images=False leaves pictures out of the file; the game lays them on by material name (look.gd IMG)."""
     for w in bpy.context.window_manager.windows:
         w.scene = sc
     for d in (EXPORTS, MODELS):
         os.makedirs(d, exist_ok=True)
         bpy.ops.export_scene.gltf(filepath=os.path.join(d, fname + ".glb"), export_format="GLB", use_active_scene=True,
                                   export_apply=True, export_lights=False, export_cameras=False, export_animations=False,
-                                  export_image_format="AUTO")
+                                  export_image_format="AUTO" if images else "NONE")
 
 
 def rng_seed(s):
