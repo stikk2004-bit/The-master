@@ -17,8 +17,8 @@ const EYE := 1.6
 const FOV := deg_to_rad(60.0)          # half-angle he can make things out in
 const BEAM_ANGLE := deg_to_rad(19.0)   # half-angle of the lantern beam
 const BEAM_RANGE := 17.0
-const DARK_SIGHT := 6.0                # a man standing in the dark, how far off he makes him out
-const LAMP_SIGHT := 15.0               # the same man under a lamp
+const DARK_SIGHT := 8.5                # a man standing in the dark, how far off he makes him out
+const LAMP_SIGHT := 18.0               # the same man under a lamp
 const LANTERN := 7.0                   # beam brightness
 
 var route: Array = []
@@ -167,7 +167,7 @@ func sees(p: Vector3, crouched: bool) -> float:
 	var fov := FOV * (1.25 if state != "patrol" else 1.0)
 	if ang > fov:
 		return 0.0
-	var reach := lerpf(DARK_SIGHT, LAMP_SIGHT, light_at(p)) * (0.6 if crouched else 1.0)
+	var reach := lerpf(DARK_SIGHT, LAMP_SIGHT, light_at(p)) * (0.65 if crouched else 1.0)
 	if p.y - global_position.y > 2.0:
 		reach *= 0.5                    # nobody looks up
 	if dist > reach:
@@ -183,7 +183,7 @@ func hears(p: Vector3, noise: float) -> float:
 	if _hidden_from_me(p):
 		return 0.0
 	var d := (p - global_position).length()
-	var radius := 9.0 * noise
+	var radius := 11.0 * noise
 	if d > radius:
 		return 0.0
 	return 1.0 - d / radius
@@ -210,9 +210,9 @@ func _physics_process(delta: float) -> void:
 	var h := hears(player.global_position, noise) if watching else 0.0
 	if s > 0.0 or h > 0.0:
 		last_seen = player.global_position
-		detection += (s * 1.2 + h * 0.6) * delta
+		detection += (s * 1.4 + h * 0.7) * delta
 	else:
-		detection -= 0.2 * delta
+		detection -= 0.15 * delta
 	detection = clampf(detection, 0.0, 1.0)
 
 	match state:

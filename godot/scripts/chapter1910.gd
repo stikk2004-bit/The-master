@@ -112,6 +112,7 @@ var film := FILM
 var _boarded := {}
 var _run := 0
 var _next_cab := 0
+var _gate_hint := false
 var _caught_busy := false
 var _clock := 0.0
 var _clock_on := false
@@ -730,10 +731,15 @@ func _get_in() -> void:
 	player.visible = false
 	player.enabled = false
 	player.set_physics_process(false)
-	player.global_position = motorcar.global_position + Vector3(0, -5, 0)
+	motorcar.add_collision_exception_with(player)
+	player.global_position = motorcar.global_position
 	motorcar.start_driving()
 	driving = true
+	_gate_hint = false
 	hud.set_objective("Drive down River Street to the freight gate.   W go, S brake, A and D steer, E get out.")
+	# pull up anywhere near the gate and E gets you out
+	var park := mk("park")
+	_add(Vector3(park.x, park.y + 1.0, park.z), 9.0, "Get out of the motorcar", _leave_car, "getout")
 
 
 func _leave_car() -> void:
@@ -741,6 +747,7 @@ func _leave_car() -> void:
 		return
 	motorcar.stop_driving()
 	driving = false
+	_drop_interactable("getout")
 	var right: Vector3 = motorcar.global_transform.basis.x
 	var out: Vector3 = motorcar.global_position - right * 1.7 + Vector3(0, 0.1, 0)
 	player.visible = true
@@ -1055,9 +1062,18 @@ func tick(delta: float) -> void:
 		hud.set_sneak(player.sneaking or worst > 0.05, worst)
 	elif stage == "car_photos" and not _caught_busy:
 		hud.set_sneak(worst > 0.05, worst)
-	if stage == "street" and not driving and not _caught_busy:
-		var gi := mk("gate_in")
-		if Vector2(player.global_position.x - gi.x, player.global_position.z - gi.z).length() < 2.2:
+	if driving:
+		# the player rides along, so the gate's prompt comes up when the car gets there
+		player.global_position = motorcar.global_position
+		if not _gate_hint and motorcar.global_position.distance_to(mk("gate_out")) < 10.0:
+			_gate_hint = true
+			hud.set_objective("This is the freight gate. Stop, press E to get out, and walk in through the gate.")
+	if stage == "street" and not driving and not _caught_busy and player.has_camera:
+		# at the freight gate on foot, or in the yard any other way, and the clock starts
+		var pp: Vector3 = player.global_position
+		var inside := pp.x > -28.4 and pp.x < 13.6 and pp.z < 26.9 and pp.z > -78.0
+		var gate := mk("gate_out").distance_to(pp) < 6.0 or mk("gate_in").distance_to(pp) < 6.0
+		if inside or gate:
 			_start_mission()
 	if _clock_on and not _caught_busy and not in_scene:
 		_clock -= delta
@@ -1992,7 +2008,13 @@ func autotest() -> void:
 	print("  driving: ", driving)
 	motorcar.global_position = mk("park")
 	await get_tree().physics_frame
+	await get_tree().process_frame
+	await get_tree().process_frame
+	print("  at the gate: hint ", _gate_hint, ", prompt offered ", String(main.current.get("prompt", "")))
 	_leave_car()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	print("  got out by the gate: stage ", stage, ", clock ", int(_clock))
 	player.global_position = mk("gate_in")
 	await _until(_is_stage.bind("yard"), 5.0)
 	print("AUTOTEST in the yard: clock ", int(_clock), ", watchmen watching ", guards[0].watching)
