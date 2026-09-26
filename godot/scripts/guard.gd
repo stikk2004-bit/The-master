@@ -242,9 +242,9 @@ func _physics_process(delta: float) -> void:
 	super._physics_process(delta)
 
 
-func _become_suspicious(where: Vector3, loud: bool) -> void:
+func _become_suspicious(where: Vector3, loud: bool, all_the_way := false) -> void:
 	state = "suspicious"
-	_search = 4.0
+	_search = 5.0 if all_the_way else 4.0
 	_sweep_t = 0.0
 	if not _said:
 		_said = true
@@ -253,16 +253,28 @@ func _become_suspicious(where: Vector3, loud: bool) -> void:
 		alarmed.emit(where)
 	# walk over for a closer look, most of the way
 	var here := global_position
-	var go := here.lerp(where, 0.75) if here.distance_to(where) > 3.0 else here
+	var go := here.lerp(where, 1.0 if all_the_way else 0.75) if here.distance_to(where) > 3.0 else here
 	walk(_nav_path(here, go), 1.55, walk_anim)
 
 
-func investigate(where: Vector3) -> void:
-	## another watchman called out: come and have a look
+func investigate(where: Vector3, all_the_way := false) -> void:
+	## another watchman called out, or something clattered: go and have a look
 	if not active or state != "patrol":
 		return
 	last_seen = where
-	_become_suspicious(where, false)
+	_become_suspicious(where, false, all_the_way)
+
+
+func heard_noise(where: Vector3) -> void:
+	## a stone landing, a can knocked over: he goes to the spot and looks around it
+	if not active or state == "alert":
+		return
+	if state == "suspicious":
+		last_seen = where
+		walk(_nav_path(global_position, where), 1.55, walk_anim)
+		_search = 5.0
+		return
+	investigate(where, true)
 
 
 func _patrol(delta: float) -> void:

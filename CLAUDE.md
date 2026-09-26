@@ -21,7 +21,7 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
   - `texgen.py`: paints the tileable PBR textures and foliage cards into godot/textures/ (numpy, no downloads).
   - `paint_1910.py`, `paint_rooms.py`: painted pictures (blinds, skyline, chalkboards, plaque, ticker, screens...).
   - `sounds.py`: synthesized sound into godot/sounds/ (yard, train, fire, marsh, crickets, room, whistle, door,
-    shutter, shot, motor). `python tools/sounds.py door shot` makes just those.
+    shutter, shot, motor, stone). `python tools/sounds.py door shot` makes just those.
   - `fonts/`: .woff copies of the OFL fonts for painting text.
   - `blender/kit.py`: the modeling kit (MB mesh builder, mat, img_mat, text_mesh, new_scene, export).
   - `blender/charlib.py`, `anims.py`, `build_characters.py`: the characters and their animations.
@@ -61,10 +61,16 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
     R unstuck, step-up), outfits (club, waiter), carrying a tray, noise level for guards. The camera is an
     item once `has_camera`: Q raises it (first-person viewfinder, wheel zoom, click emits `shutter`).
     Space against a ledge from knee to chest high climbs onto it (_try_mantle). hide_at()/unhide() tuck
-    the player out of sight (guards ignore a hidden player unless right on top of him).
+    the player out of sight (guards ignore a hidden player unless right on top of him). F throws a stone
+    (`stones`, `throw_stone` signal); the chapter makes it clatter where it lands and guards within 17 m go
+    and look (guard.heard_noise). Jekyll gives 3; two more lie hidden in the yard (MARK_stones_0 on a
+    climbable crate stack, MARK_stones_1 on the empty boxcar's roof).
   - `scripts/hud.gd`: title, prompt bar, reading panel with [url] links, guest book, toast, chime,
     location banners, subtitles (say), letterbox, chapter cards, objective line, a second line under it
-    for countdowns and photo tallies (set_timer), sneak eye (sneak_eye.gd).
+    for countdowns and photo tallies (set_timer), the signal lamp (signal_lamp.gd: green, amber, red as the
+    watchmen notice you; it replaced a Skyrim-style eye). The location banner is a punched ticket slip that
+    drops in from the top; the E prompt is a green enamel sign with a brass key token. Keep the interface
+    1910 railroad and club, not borrowed from other games.
   - `scripts/lessons.gd`: the four studies as data: 13 chapters, grown and kid text, one quiz each.
   - `scripts/money_sim.gd`: the Money Machine (gold, bank loans, spending and taxes, the Fed, run 40 years).
   - `scripts/npc.gd`: the hooded figure who walks the lawn. `scripts/sound.gd`: ambience loader.

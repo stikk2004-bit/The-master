@@ -483,6 +483,27 @@ def yard():
         mark(coll, "MARK_ladder_%d_bottom" % i, (-5.05, yb - 0.75, 0.0), 0.0)
         mark(coll, "MARK_ladder_%d_top" % i, (-4.4, yb + 0.9, 4.25), 0.0)
     ld.obj("Ladders", coll)
+    # more freight to hide behind: crates, cases and barrels scattered on the yard's west side
+    mc = MB()
+    extra = [(-10.2, -20.5, 1), (-8.8, -21.4, 2), (-12.6, -23.8, 1), (-6.9, -23.2, 1), (-0.2, -22.4, 1), (0.9, -18.4, 2),
+             (-8.6, -3.4, 1), (-12.9, 0.3, 2), (-7.9, 4.2, 1), (-13.9, 15.4, 1), (-8.4, 22.4, 2), (-10.6, 28.0, 1),
+             (-6.4, 31.6, 2), (-13.0, 34.6, 1), (-7.4, -8.4, 1), (-12.6, -17.8, 1)]
+    for x, y, n in extra:
+        rz = R.uniform(-0.4, 0.4)
+        z = 0.0
+        for k in range(n):
+            sz = R.uniform(0.95, 1.3)
+            crate(mc, m, (x + R.uniform(-0.12, 0.12), y + R.uniform(-0.12, 0.12), z), (sz * R.uniform(0.9, 1.4), sz, sz * 0.9), rz + R.uniform(-0.15, 0.15))
+            z += sz * 0.9
+    # a two-high stack of plain cases you can climb, with something useful on top
+    crate(mc, m, (-9.4, 29.2, 0.0), (1.15, 1.15, 1.0), 0.1)
+    crate(mc, m, (-9.4, 29.2, 1.0), (1.0, 1.0, 0.9), 0.25)
+    mark(coll, "MARK_stones_0", (-9.4, 29.2, 1.9))
+    mark(coll, "MARK_stones_1", (-4.0, 3.2, 4.25))
+    for cx, cy in ((-9.6, -18.8), (-1.0, -25.2), (-12.2, 8.6), (-7.2, 26.2), (-14.4, -16.4)):
+        for k in range(R.randint(3, 5)):
+            barrel(mc, m, (cx + R.uniform(-0.8, 0.8), cy + R.uniform(-0.8, 0.8), 0.0))
+    mc.obj("MoreFreight-col", coll)
     # the freight shed's dark doorway on the loading dock
     dd = MB()
     dd.box((-16.06, 3.0, 1.1), (-15.98, 5.4, 3.6), m["glass_dark"])

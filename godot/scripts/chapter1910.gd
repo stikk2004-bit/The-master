@@ -63,6 +63,7 @@ const WATCHMEN := [
 	["res://models/npc_yardman.glb", "The railroad bull", 18, ["You. Stop right there.", "I see you moving."], ["Hm.", "Not tonight, whoever you are."]],
 ]
 const FILM := 12                   # exposures on Jekyll's roll
+const STONES := 3                  # stones Jekyll hands you; two more are hidden in the yard
 const MISSION_SECONDS := 420.0     # from the freight gate until the train pulls out
 const FIRST_CAB := 16.0
 const CAB_GAP := 40.0
@@ -113,6 +114,7 @@ var _boarded := {}
 var _run := 0
 var _next_cab := 0
 var _gate_hint := false
+var _piles: Array = []             # [Node3D, mark name] stones lying about the yard
 var _caught_busy := false
 var _clock := 0.0
 var _clock_on := false
@@ -510,6 +512,9 @@ func build(level_name: String, lvl: Node3D) -> void:
 		player.shutter.connect(_on_shutter)
 	if not player.camera_toggled.is_connected(_on_camera_toggled):
 		player.camera_toggled.connect(_on_camera_toggled)
+	if not player.throw_stone.is_connected(_on_throw):
+		player.throw_stone.connect(_on_throw)
+	_piles.clear()
 	rear_door = null
 	front_door = null
 	hud.set_timer("")
@@ -548,6 +553,7 @@ func leave_to_present() -> void:
 	player.set_camera_up(false)
 	player.set_kodak(false)
 	player.has_camera = false
+	player.stones = 0
 	hud.mission.set_item("")
 	hud.mission.set_clock("", -1.0)
 	player.set_outfit("club")
@@ -628,6 +634,7 @@ func _build_hoboken() -> void:
 	motorcar.rotation.y = mk_yaw("jcar") + PI
 	motorcar.exit_requested.connect(_leave_car)
 	_add_yard_spots()
+	_lay_stones()
 	player.place(mk("street_start"), _yaw_to(mk("street_start"), mk("street_start") + Vector3(1, 0, 0)))
 	player.sneaking = false
 	player.can_sneak = true
@@ -638,12 +645,22 @@ func _headlamps(car: Node3D) -> void:
 	for side in [-0.55, 0.55]:
 		var hl := SpotLight3D.new()
 		hl.light_color = Color("ffe0a8")
-		hl.light_energy = 3.0
-		hl.spot_range = 16.0
-		hl.spot_angle = 28.0
+		hl.light_energy = 7.0
+		hl.spot_range = 30.0
+		hl.spot_angle = 30.0
+		hl.spot_attenuation = 0.8
 		hl.position = Vector3(side, 1.12, -2.4)
+		hl.rotation.x = -0.06
 		hl.light_volumetric_fog_energy = 2.5
+		hl.shadow_enabled = true
 		car.add_child(hl)
+	# the carbide glow off the brass and the lamps themselves, so the car reads in the dark
+	var glow := OmniLight3D.new()
+	glow.light_color = Color("ffd9a0")
+	glow.light_energy = 0.9
+	glow.omni_range = 5.5
+	glow.position = Vector3(0.0, 1.6, -1.8)
+	car.add_child(glow)
 
 
 func _bake_nav() -> void:
@@ -715,11 +732,14 @@ func _talk_jekyll() -> void:
 	await line("Jekyll", "I want every face on film before it goes through that door. All seven. Miss one and the night's wasted.")
 	await line("Jekyll", "Here. A folding pocket Kodak and a fresh roll. Twelve exposures. Don't spend them on the fog.")
 	await line("Jekyll", "The railroad keeps its own men in that yard, and they carry bull's-eye lanterns. Stay out of the beam, and don't run where they can hear you.")
+	await line("Jekyll", "And these. Three good stones off the riverbank. Pitch one past a watchman and he'll go see what landed.")
 	await line("Jekyll", "Take my motorcar down to the freight gate at the end of the street. The first cab is due any minute, and the train won't wait on you.")
 	jk.play("Idle", 0.3)
 	end_scene()
 	_give_camera()
-	hud.toast("You have a folding pocket Kodak.   Q to hold it up, click to take a picture, wheel to zoom.", 7.0)
+	player.stones = STONES
+	_update_item()
+	hud.toast("You have a folding pocket Kodak and three stones.   Q holds the camera up, click takes a picture, wheel zooms.   F throws a stone.", 8.0)
 	hud.set_objective("Drive the motorcar down River Street to the yard's freight gate.")
 	_add(motorcar.global_position, 2.8, "Get in the motorcar", _get_in, "car")
 	_beacon(mk("gate_out") + Vector3(0, 2.8, 0), "gate")
@@ -734,6 +754,7 @@ func _get_in() -> void:
 	motorcar.add_collision_exception_with(player)
 	player.global_position = motorcar.global_position
 	motorcar.start_driving()
+	_boost_exposure(1.7)
 	driving = true
 	_gate_hint = false
 	hud.set_objective("Drive down River Street to the freight gate.   W go, S brake, A and D steer, E get out.")
@@ -747,6 +768,7 @@ func _leave_car() -> void:
 		return
 	motorcar.stop_driving()
 	driving = false
+	_restore_exposure()
 	_drop_interactable("getout")
 	var right: Vector3 = motorcar.global_transform.basis.x
 	var out: Vector3 = motorcar.global_position - right * 1.7 + Vector3(0, 0.1, 0)
@@ -996,6 +1018,8 @@ func _yard_reset(who: String, shout: String, title: String, sub: String) -> void
 		g.reset_to(spots[int(spec[2]) % spots.size()] if not spots.is_empty() else g.global_position)
 		g.active = true
 		g.watching = true
+	player.stones = STONES
+	_lay_stones()
 	player.enabled = true
 	_caught_busy = false
 	_start_mission()
@@ -1099,6 +1123,105 @@ func tick(delta: float) -> void:
 		m.set_shader_parameter("offset", fmod(float(m.get_shader_parameter("offset")) + delta * 0.09, 1.0))
 
 
+# ================================================================== STONES
+## F throws one where you're looking. Where it lands it clatters, and any watchman within earshot
+## walks over to see what it was, and stands there a while swinging his lantern.
+func _on_throw(from: Vector3, vel: Vector3) -> void:
+	_update_item()
+	var rb := RigidBody3D.new()
+	rb.mass = 0.4
+	rb.contact_monitor = true
+	rb.max_contacts_reported = 2
+	rb.continuous_cd = true
+	var cs := CollisionShape3D.new()
+	var sph := SphereShape3D.new()
+	sph.radius = 0.06
+	cs.shape = sph
+	rb.add_child(cs)
+	rb.add_child(_stone_mesh(0.065))
+	level.add_child(rb)
+	rb.global_position = from
+	rb.add_collision_exception_with(player)
+	rb.linear_velocity = vel
+	rb.angular_velocity = Vector3(randf_range(-8, 8), randf_range(-8, 8), randf_range(-8, 8))
+	rb.body_entered.connect(_stone_landed.bind(rb))
+
+
+func _stone_mesh(r: float) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = r
+	sm.height = r * 1.6
+	sm.radial_segments = 10
+	sm.rings = 6
+	mi.mesh = sm
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color("6d665c")
+	m.roughness = 0.95
+	mi.material_override = m
+	return mi
+
+
+func _stone_landed(_other: Node, rb: RigidBody3D) -> void:
+	if not is_instance_valid(rb) or rb.has_meta("landed"):
+		return
+	rb.set_meta("landed", true)
+	var at := rb.global_position
+	var snd := AudioStreamPlayer3D.new()
+	snd.stream = load("res://sounds/stone.wav")
+	snd.unit_size = 8.0
+	snd.volume_db = 2.0
+	level.add_child(snd)
+	snd.global_position = at
+	snd.finished.connect(snd.queue_free)
+	snd.play()
+	var heard := 0
+	for g in guards:
+		if not g.active:
+			continue
+		if (g as Node3D).global_position.distance_to(at) < 17.0:
+			g.heard_noise(at)
+			heard += 1
+	if heard == 0 and stage in ["yard", "board"]:
+		hud.toast("Nobody near enough to hear that one.", 2.0)
+
+
+func _lay_stones() -> void:
+	## two more stones hidden in the yard: on top of a crate stack, and up on the empty boxcar's roof
+	for p in _piles:
+		if is_instance_valid(p[0]):
+			(p[0] as Node).queue_free()
+	_piles.clear()
+	_drop_interactable("stones")
+	for k in 2:
+		var mk_name := "stones_%d" % k
+		if not marks.has(mk_name):
+			continue
+		var pile := Node3D.new()
+		level.add_child(pile)
+		pile.global_position = mk(mk_name)
+		for j in 3:
+			var s := _stone_mesh(0.05 + 0.015 * j)
+			s.position = Vector3(0.07 * j - 0.07, 0.04, 0.05 * (j % 2))
+			pile.add_child(s)
+		_piles.append([pile, mk_name])
+		_add(mk(mk_name) + Vector3(0, 0.3, 0), 0.75, "Pick up a good throwing stone", _pick_stone.bind(k), "stones")
+
+
+func _pick_stone(k: int) -> void:
+	for p in _piles:
+		if String(p[1]) == "stones_%d" % k and is_instance_valid(p[0]):
+			(p[0] as Node).queue_free()
+	var keep := []
+	for it in main.interactables:
+		if (it["cb"] as Callable).get_bound_arguments() != [k] or String(it.get("tag", "")) != "stones":
+			keep.append(it)
+	main.interactables = keep
+	player.stones += 1
+	_update_item()
+	hud.toast("A good throwing stone.  You have %d." % player.stones, 2.5)
+
+
 # ================================================================== THE POCKET KODAK
 ## An item once Jekyll hands it over: Q holds it up, the wheel zooms, a click takes the picture.
 ## Whatever is nearest the middle of the viewfinder, big enough in the frame and in plain sight,
@@ -1110,27 +1233,41 @@ func _give_camera() -> void:
 
 
 func _update_item() -> void:
+	var t := ""
 	if player.has_camera:
-		hud.mission.set_item("Q   Pocket Kodak   ·   %d exposures left" % film)
-	else:
-		hud.mission.set_item("")
+		t = "Q   Pocket Kodak   ·   %d exposures left" % film
+	if player.stones > 0 or stage in ["yard", "board", "street"] and player.has_camera:
+		t += "\nF   Stones   ·   %d" % player.stones
+	hud.mission.set_item(t)
 
 
 var _exposure_before := -1.0
 
 
+func _boost_exposure(factor: float) -> void:
+	var env: Environment = main.env
+	if env == null:
+		return
+	if _exposure_before < 0.0:
+		_exposure_before = env.tonemap_exposure
+	env.tonemap_exposure = _exposure_before * factor
+
+
+func _restore_exposure() -> void:
+	var env: Environment = main.env
+	if env and _exposure_before >= 0.0:
+		env.tonemap_exposure = _exposure_before
+	_exposure_before = -1.0
+
+
 func _on_camera_toggled(on: bool) -> void:
 	hud.mission.show_finder(on)
 	# through the lens your eye opens up to the dark, so the faces can be made out
-	var env: Environment = main.env
 	if on:
 		hud.mission.set_finder(film, player.zoom, false)
-		if env and _exposure_before < 0.0:
-			_exposure_before = env.tonemap_exposure
-			env.tonemap_exposure = _exposure_before * (2.2 if stage in ["yard", "board", "street"] else 1.3)
-	elif env and _exposure_before >= 0.0:
-		env.tonemap_exposure = _exposure_before
-		_exposure_before = -1.0
+		_boost_exposure(3.0 if stage in ["yard", "board", "street"] else 1.4)
+	else:
+		_restore_exposure()
 
 
 func _subjects() -> Array:
@@ -2025,6 +2162,14 @@ func autotest() -> void:
 		if g.is_walking():
 			moving += 1
 	print("  watchmen on the move: ", moving, " of ", guards.size())
+	# pitch a stone near the first watchman and see if he goes to look
+	print("  stones in pocket: ", player.stones, ", hidden piles: ", _piles.size())
+	var g0: Node3D = guards[0]
+	_on_throw(g0.global_position + Vector3(3.0, 2.0, 0.0), Vector3(0.0, -3.0, 0.0))
+	await get_tree().create_timer(1.5).timeout
+	print("  after the stone: watchman ", guards[0].state, ", walking ", guards[0].is_walking())
+	_pick_stone(0)
+	print("  picked up a hidden stone: ", player.stones)
 	# hide, climb, come down
 	_hide("tarp")
 	print("  hidden under the tarp: ", player.hidden, ", seen by the detective: ", guards[0].sees(player.global_position, true))

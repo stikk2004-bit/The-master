@@ -14,6 +14,7 @@ Controls
   Space        jump
   E            use whatever you're standing near, or move a conversation along; hide; get out of the motorcar
   Q            once you have the pocket Kodak: hold it up to your eye (again to put it away)
+  F            throw a stone where you're looking; a watchman nearby goes to see what landed
   Click        through the Kodak: take the picture          Mouse wheel: zoom
   Space        jump, or climb onto a crate or ledge in front of you
   Driving      W go, S brake, A and D steer, E get out once she's stopped

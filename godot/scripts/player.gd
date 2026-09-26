@@ -20,6 +20,7 @@ const OUTFITS := {"club": "res://models/player.glb", "waiter": "res://models/pla
 signal served
 signal shutter
 signal camera_toggled(on: bool)
+signal throw_stone(from: Vector3, velocity: Vector3)
 
 var enabled := true
 var can_sneak := true
@@ -47,6 +48,7 @@ var last_safe := Vector3.ZERO
 var _safe_timer := 0.0
 var _pivot_h := 1.55
 var has_camera := false
+var stones := 0                   # throwing stones in your pocket; F throws one where you're looking
 var can_photo := true
 var camera_up := false
 var fp_cam: Camera3D
@@ -392,6 +394,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("camera") and has_camera and can_photo:
 		set_camera_up(not camera_up)
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed("throw") and stones > 0 and not camera_up and not carrying:
+		# a lob toward wherever the camera is looking
+		var f := -cam.global_transform.basis.z
+		f.y = maxf(f.y, -0.25)
+		var dir := (f.normalized() + Vector3(0.0, 0.32, 0.0)).normalized()
+		stones -= 1
+		if not hidden:
+			model.rotation.y = atan2(f.x, f.z)
+		throw_stone.emit(eye_position() + Vector3(f.x, 0.0, f.z).normalized() * 0.45, dir * 13.0)
 		get_viewport().set_input_as_handled()
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:

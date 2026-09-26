@@ -123,6 +123,7 @@ func _setup_input() -> void:
 	_bind("sneak", [KEY_C, KEY_CTRL])
 	_bind("quality", [KEY_F9])
 	_bind("camera", [KEY_Q])
+	_bind("throw", [KEY_F])
 
 
 func _bind(action: String, keys: Array) -> void:
