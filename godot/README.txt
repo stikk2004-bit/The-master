@@ -18,7 +18,7 @@ Controls
   M            in 1910: Jekyll's sketch of the yard, with you on it (the yard doesn't stop while you look)
   Click        through the Kodak: take the picture          Mouse wheel: zoom
   Space        jump, or climb onto a crate or ledge in front of you
-  Driving      W go, S brake, A and D steer, E get out once she's stopped
+  Driving      W go, S brake, A and D steer, E hop out (no need to stop first)
   R            stuck? pops you back to the last good spot
   Mouse wheel  camera closer or farther
   Esc          close a panel, free the mouse, or skip a scene

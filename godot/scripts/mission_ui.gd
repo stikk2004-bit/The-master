@@ -50,6 +50,7 @@ void fragment() {
 	sepia = ShaderMaterial.new()
 	sepia.shader = sh
 	_build_finder()
+	_build_watch_marks()
 	_build_clock()
 	_build_objective()
 	_build_item()
@@ -198,6 +199,92 @@ func _build_item() -> void:
 func set_item(text: String) -> void:
 	item_box.visible = text != ""
 	item_label.text = text
+
+
+# ------------------------------------------------------------------ who's onto you
+class WatchMarks extends Control:
+	## over every watchman who has started to notice you, a small eye that opens and reddens as he does,
+	## with a ring filling round it; if he's off the screen or behind you, the eye waits at the screen's
+	## edge with a pointer toward him
+	var items: Array = []     # [head position, how much he's seen 0..1]
+	var cam: Camera3D
+
+	func _process(_delta: float) -> void:
+		if visible:
+			queue_redraw()
+
+	func _col(lvl: float) -> Color:
+		return Color("e0a040").lerp(Color("d23a28"), smoothstep(0.45, 0.9, lvl))
+
+	func _eye(c: Vector2, lvl: float, s: float) -> void:
+		var col := _col(lvl)
+		if lvl >= 0.95:
+			col.a = 0.6 + 0.4 * sin(Time.get_ticks_msec() / 80.0)
+		var w := 30.0 * s
+		var h := 11.0 * s
+		var open := 0.25 + 0.75 * clampf(lvl, 0.0, 1.0)
+		draw_circle(c, 21.0 * s, Color(0, 0, 0, 0.5))
+		draw_arc(c, 21.0 * s, 0.0, TAU, 36, Color(col, 0.25), 2.0, true)
+		draw_arc(c, 21.0 * s, -PI / 2.0, -PI / 2.0 + TAU * clampf(lvl, 0.0, 1.0), 36, col, 3.0, true)
+		var pts := PackedVector2Array()
+		for i in 17:
+			var t := float(i) / 16.0
+			pts.append(c + Vector2((t - 0.5) * w, -sin(t * PI) * h * open))
+		for i in range(16, -1, -1):
+			var t := float(i) / 16.0
+			pts.append(c + Vector2((t - 0.5) * w, sin(t * PI) * h * open))
+		pts.append(pts[0])
+		draw_polyline(pts, col, 2.0, true)
+		draw_circle(c, h * 0.6 * open, Color(col, 0.35))
+		draw_circle(c, h * 0.3 * open + 1.0, col)
+
+	func _draw() -> void:
+		if cam == null or not is_instance_valid(cam):
+			return
+		var vp := size
+		var ctr := vp / 2.0
+		var inset := 64.0
+		for it in items:
+			var head: Vector3 = it[0]
+			var lvl: float = it[1]
+			var behind := cam.is_position_behind(head)
+			var p := cam.unproject_position(head)
+			if not behind and p.x > inset and p.x < vp.x - inset and p.y > inset and p.y < vp.y - inset:
+				_eye(p, lvl, 1.0)
+				continue
+			var d := p - ctr
+			if behind:
+				d = -d
+			if d.length() < 1.0:
+				d = Vector2(0, -1)
+			var hx := vp.x / 2.0 - inset
+			var hy := vp.y / 2.0 - inset
+			var k := minf(hx / maxf(absf(d.x), 0.001), hy / maxf(absf(d.y), 0.001))
+			var at := ctr + d * k
+			var dir := d.normalized()
+			var nrm := Vector2(-dir.y, dir.x)
+			var tip := at + dir * 36.0
+			draw_colored_polygon(PackedVector2Array([tip, at + dir * 23.0 + nrm * 10.0, at + dir * 23.0 - nrm * 10.0]), _col(lvl))
+			_eye(at, lvl, 0.9)
+
+
+var watch_marks: WatchMarks
+
+
+func _build_watch_marks() -> void:
+	watch_marks = WatchMarks.new()
+	watch_marks.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	watch_marks.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	watch_marks.visible = false
+	add_child(watch_marks)
+
+
+func set_watchers(items: Array, cam: Camera3D) -> void:
+	if watch_marks == null:
+		return
+	watch_marks.items = items
+	watch_marks.cam = cam
+	watch_marks.visible = not items.is_empty()
 
 
 # ------------------------------------------------------------------ Jekyll's sketch of the yard

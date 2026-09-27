@@ -1,6 +1,6 @@
 extends CharacterBody3D
 ## Jekyll's motorcar: W and S for the throttle and the brake (and reverse), A and D to steer,
-## E to get out once she's stopped. A chase camera rides behind.
+## E to get out (she pulls up short and out you hop, however fast you were going). A chase camera rides behind.
 ## The model faces its local -Z (as exported from Blender), so the heading is rotation.y.
 
 signal exit_requested
@@ -72,9 +72,8 @@ func forward() -> Vector3:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if driving and event.is_action_pressed("interact"):
-		# at a crawl she's easy to hop out of: the brake goes on and out you get
-		if absf(speed) < 3.0:
-			exit_requested.emit()
+		# no need to slow down first: the brake goes on hard and out you get
+		exit_requested.emit()
 		get_viewport().set_input_as_handled()
 
 
