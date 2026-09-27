@@ -26,6 +26,14 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
   - `blender/kit.py`: the modeling kit (MB mesh builder, mat, img_mat, text_mesh, new_scene, export).
   - `blender/charlib.py`, `anims.py`, `build_characters.py`: the characters and their animations.
   - `blender/build_1910.py`: Hoboken yard, train, motor cab, the private car, the Jekyll meeting room.
+    The yard's `yard_more()` lays the gravel walks (HB_Path) and plank crossings (HB_Planks), post lamps
+    along the walks (LIGHT_path), switch stands and a signal mast (LIGHT_sigred / siggreen), the lit yard
+    office by the gate, a tool house, lumber, ties, car wheels and a dray in the north end, baggage carts
+    and milk cans on the platform, and the signboards.
+  - `blender/yard_map.py`: draws a plan of the yard from the models themselves (every upward face, colored
+    by material, plus the MARK_ / LIGHT_ empties): godot/textures/yard_map.png (Jekyll's sketch, M in the
+    game) and art/maps/hoboken_yard_map.pdf (to print). Re-run after changing the yard. Its frame and scale
+    must match mission_ui.gd MAP_X0 / MAP_Y1 / MAP_PX_PER_M / MAP_PAD / MAP_SIZE (it prints them).
   - `blender/build_rooms.py`: the Honey House, the Drafting Room, the Trading Floor.
   - `blender/remaster_exterior.py`: lanterns on the walk's gas lamps, benches, urns by the porch steps.
   - `blender/split_doors.py`: splits the clubhouse's double doors into leaves that swing (see Doors below)
@@ -44,8 +52,9 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
     Island, the meeting room), the pocket Kodak, the caught resets, the evidence panel at the end.
   - `scripts/mission_ui.gd`: the mission layer of the HUD: big countdown (set_clock), objective box
     (hud.set_objective / hud.set_timer land here), camera item slot, viewfinder, the photo print that
-    pops up with who's in it (small, slides in at the left, then flies to its slot), and the strip of
-    prints still needed.
+    pops up with who's in it (small, slides in at the left, then flies to its slot), the strip of
+    prints still needed, and Jekyll's sketch of the yard (show_map, set_map_player: an arrow where you
+    are, the way you're looking; the key is cropped off in the game).
   - `scripts/drive.gd`: Jekyll's motorcar (W/S throttle and brake, A/D steer, E out when stopped).
   - `scripts/look.gd`: textured materials by Blender material name (MATS, EMIT, IMG tables),
     lighting presets, color grading, graphics quality.
@@ -158,8 +167,9 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
 - In the chapter: `begin_scene()` / `end_scene()` wrap cutscenes (letterbox, cinematic camera); `line(who, text)`
   shows a subtitle and waits; E moves a line along (in cutscenes and while pouring coffee), Esc skips the scene.
 - The chapter, as played: a letter, then Jekyll (a made-up character; the evidence panel says so) by his
-  motorcar at the west end of River Street. He hands over the Kodak (12 exposures). Drive to the freight gate,
-  walk in, and the clock starts (7:00). The seven arrive while you play, each at his own pace and by one of
+  motorcar at the west end of River Street. He hands over the Kodak (12 exposures), three stones and his sketch of the yard (M).
+  Drive to the freight gate, walk in, and the clock starts (7:00). Past the gate the yard reads lighter than
+  the street (chapter _yard_air: exposure x1.3, ambient x1.6; the Kodak and motorcar boosts ride on that). The seven arrive while you play, each at his own pace and by one of
   three ways, shuffled every try: by cab up River Street, on foot down the station platform, or across the
   yard from the far side and up the west steps (_arrival_live, MARK_station_walk_*, yard_walk_*, west_step_*).
   They tip their hats to the porter, climb the observation platform steps and go in at the rear door; each
@@ -182,8 +192,9 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
 - `godot --headless --path godot -- --stealthtest` watches the roaming watchmen for a minute from under the tarp
   (how far they get, how spread out they stay, whether a hidden player stays hidden), then stands in a beam.
 - `godot --headless --path godot -- --roomtest` uses everything in the three rooms.
-- `--shot` extras: `swing=Door_Library` opens a door first; `setup=rear|front|finder|jekyll` stages a chapter
-  moment (chapter1910 shot_setup; finder looks through the Kodak from under the tarp).
+- `--shot` extras: `swing=Door_Library` opens a door first; `setup=rear|front|finder|jekyll|yard|map` stages a
+  chapter moment (chapter1910 shot_setup; finder looks through the Kodak from under the tarp; yard is the yard
+  as played with its HUD; map holds up Jekyll's sketch).
 - After adding textures or models, run `godot --headless --path godot --import` once.
 
 ## Status

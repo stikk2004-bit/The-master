@@ -126,6 +126,7 @@ func _setup_input() -> void:
 	_bind("quality", [KEY_F9])
 	_bind("camera", [KEY_Q])
 	_bind("throw", [KEY_F])
+	_bind("map", [KEY_M])
 
 
 func _bind(action: String, keys: Array) -> void:
@@ -699,6 +700,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("quality"):
 		_cycle_quality()
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed("map"):
+		chapter.toggle_map()
 		get_viewport().set_input_as_handled()
 		return
 	if busy:

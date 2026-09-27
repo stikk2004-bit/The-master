@@ -501,6 +501,10 @@ func start() -> void:
 
 func build(level_name: String, lvl: Node3D) -> void:
 	_run += 1              # anything still waiting on the last room gives up
+	_base_exposure = -1.0
+	_boost = 1.0
+	_night_air = []
+	hud.mission.show_map(false)
 	level = lvl
 	marks.clear()
 	actors.clear()
@@ -584,6 +588,7 @@ func leave_to_present() -> void:
 ## the yard with bull's-eye lanterns. All seven taken, you board at the car's dark front steps.
 func _build_hoboken() -> void:
 	main._air("night1910")
+	_night_air = [main.env.tonemap_exposure, main.env.ambient_light_energy]
 	RenderingServer.global_shader_parameter_set("ground_y", 0.0)
 	_load("res://models/hoboken_yard.glb")
 	train_node = _load("res://models/hoboken_train.glb", _moving_train_mats())
@@ -766,11 +771,12 @@ func _talk_jekyll() -> void:
 	shot(mk("cam_jekyll"), mk("cam_jekyll_look"), 42.0)
 	jk.play("Talk", 0.3)
 	await line("Jekyll", "You came. Good. Call me Jekyll. It isn't my name either, which puts me in fine company tonight.")
-	await line("Jekyll", "Seven of them, coming to the Senator's car by motor cab, one at a time. Bankers, a man from the Treasury, and the Senator himself.")
+	await line("Jekyll", "Seven of them, coming to the Senator's car one at a time. Some by motor cab, some on foot, and no two nights the same way. Bankers, a man from the Treasury, and the Senator himself.")
 	await line("Jekyll", "I want every face on film before it goes through that door. All seven. Miss one and the night's wasted.")
 	await line("Jekyll", "Here. A folding pocket Kodak and a fresh roll. Twelve exposures. Don't spend them on the fog.")
 	await line("Jekyll", "The railroad keeps its own men in that yard, and they carry bull's-eye lanterns. Stay out of the beam, and don't run where they can hear you.")
 	await line("Jekyll", "And these. Three good stones off the riverbank. Pitch one past a watchman and he'll go see what landed.")
+	await line("Jekyll", "I drew you the yard, best I remember it. The walks are lit and the watchmen know it. Keep to the dark between them.")
 	await line("Jekyll", "Take my motorcar down to the freight gate at the end of the street. The first cab is due any minute, and the train won't wait on you.")
 	jk.play("Idle", 0.3)
 	end_scene()
@@ -888,6 +894,7 @@ func _climb(i: int, up: bool) -> void:
 
 func _start_mission() -> void:
 	stage = "yard"
+	_yard_air()
 	_drop_interactable("car")
 	_drop_beacon("gate")
 	for g in guards:
@@ -1071,6 +1078,7 @@ func _on_caught(g) -> void:
 		return
 	if stage != "yard" and stage != "board":
 		return
+	hud.mission.show_map(false)
 	_yard_reset(g.display_name, "Hey! You there! Stop right where you are!", "Caught", "Nobody was meant to see this car tonight. Try again.")
 
 
@@ -1184,6 +1192,11 @@ func _board() -> void:
 
 func tick(delta: float) -> void:
 	## called from main every frame
+	if hud.mission.map_open:
+		if _map_ok() and not in_scene:
+			_update_map()
+		else:
+			hud.mission.show_map(false)
 	var worst := 0.0
 	for g in guards:
 		if g.active and g.watching:
@@ -1338,32 +1351,74 @@ func _give_camera() -> void:
 	_update_item()
 
 
+func _map_ok() -> bool:
+	return player != null and player.has_camera and stage in ["street", "yard", "board"]
+
+
+func toggle_map() -> void:
+	## M: Jekyll's sketch of the yard, held up at the side of your view. The yard doesn't stop for it.
+	if hud.mission.map_open:
+		hud.mission.show_map(false)
+		return
+	if not _map_ok() or in_scene or _caught_busy:
+		return
+	if player.camera_up:
+		player.set_camera_up(false)
+	hud.mission.show_map(true)
+	_update_map()
+
+
+func _update_map() -> void:
+	var cam := get_viewport().get_camera_3d()
+	var fwd := Vector3(0, 0, -1)
+	if cam:
+		fwd = -cam.global_transform.basis.z
+	hud.mission.set_map_player(player.global_position, fwd)
+
+
 func _update_item() -> void:
 	var t := ""
 	if player.has_camera:
 		t = "Q   Pocket Kodak   ·   %d exposures left" % film
 	if player.stones > 0 or stage in ["yard", "board", "street"] and player.has_camera:
 		t += "\nF   Stones   ·   %d" % player.stones
+	if _map_ok():
+		t += "\nM   Jekyll's sketch of the yard"
 	hud.mission.set_item(t)
 
 
-var _exposure_before := -1.0
+var _base_exposure := -1.0   # the room's own exposure (the yard lifts it a little); boosts ride on top
+var _boost := 1.0
+var _night_air := []          # the night preset's exposure and ambient, as River Street has them
 
 
 func _boost_exposure(factor: float) -> void:
-	var env: Environment = main.env
-	if env == null:
-		return
-	if _exposure_before < 0.0:
-		_exposure_before = env.tonemap_exposure
-	env.tonemap_exposure = _exposure_before * factor
+	_boost = factor
+	_apply_exposure()
 
 
 func _restore_exposure() -> void:
+	_boost = 1.0
+	_apply_exposure()
+
+
+func _apply_exposure() -> void:
 	var env: Environment = main.env
-	if env and _exposure_before >= 0.0:
-		env.tonemap_exposure = _exposure_before
-	_exposure_before = -1.0
+	if env == null:
+		return
+	if _base_exposure < 0.0:
+		_base_exposure = env.tonemap_exposure
+	env.tonemap_exposure = _base_exposure * _boost
+
+
+func _yard_air() -> void:
+	## past the gate your eyes have got used to the dark: the yard reads a little lighter than the street
+	var env: Environment = main.env
+	if env == null or _night_air.is_empty():
+		return
+	_base_exposure = float(_night_air[0]) * 1.3
+	env.ambient_light_energy = float(_night_air[1]) * 1.6
+	_apply_exposure()
 
 
 func _on_camera_toggled(on: bool) -> void:
@@ -1371,7 +1426,8 @@ func _on_camera_toggled(on: bool) -> void:
 	# through the lens your eye opens up to the dark, so the faces can be made out
 	if on:
 		hud.mission.set_finder(film, player.zoom, false)
-		_boost_exposure(3.0 if stage in ["yard", "board", "street"] else 1.4)
+		hud.mission.show_map(false)
+		_boost_exposure(2.4 if stage in ["yard", "board"] else (3.0 if stage == "street" else 1.4))
 	else:
 		_restore_exposure()
 
@@ -2217,6 +2273,18 @@ func shot_setup(what: String) -> void:
 			if front_door:
 				front_door.rotation.y = 1.4
 			_beacon(mk("steps_marker"), "board")
+		"yard", "map":
+			# the yard as you find it once you're through the gate; map: with Jekyll's sketch held up
+			_give_camera()
+			stage = "yard"
+			_yard_air()
+			hud.mission.set_slots(7)
+			hud.mission.set_clock("The train leaves in", 361.0)
+			hud.set_objective("Photograph all seven men before they go into the Senator's car.   Q for the camera.")
+			_update_item()
+			if what == "map":
+				hud.mission.show_map(true)
+				_update_map()
 		"finder":
 			# looking through the Kodak at a man on the platform, from under the tarp
 			var n = actors["nelson"]

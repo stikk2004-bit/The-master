@@ -54,6 +54,7 @@ void fragment() {
 	_build_objective()
 	_build_item()
 	_build_strip()
+	_build_map()
 	flash = ColorRect.new()
 	flash.color = Color(1, 1, 1, 0)
 	flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -197,6 +198,131 @@ func _build_item() -> void:
 func set_item(text: String) -> void:
 	item_box.visible = text != ""
 	item_label.text = text
+
+
+# ------------------------------------------------------------------ Jekyll's sketch of the yard
+## The map is drawn by tools/blender/yard_map.py from the yard's own models. These numbers must match
+## that script: the world meters it covers, how many pixels to a meter, and the margins round the plan.
+const MAP_X0 := -40.0
+const MAP_Y1 := 80.0
+const MAP_PX_PER_M := 16.0
+const MAP_PAD := Vector2(70, 190)
+const MAP_SIZE := Vector2(1260, 2612)
+const MAP_SHOWN := Vector2(1260, 2182)   # in the game the key at the bottom is left off (it's on the printed copy)
+
+var map_open := false
+var map_card: Control
+var map_pic: TextureRect
+var map_mark: MapMark
+var map_hint: Label
+var _map_tw: Tween
+
+
+class MapMark extends Control:
+	## you are here: an arrow the way you're looking, with a ring that breathes so you find it fast
+	var at := Vector2.ZERO
+	var dir := Vector2(0, -1)
+	var off_west := false
+
+	func _process(_delta: float) -> void:
+		if visible:
+			queue_redraw()
+
+	func _draw() -> void:
+		var t := Time.get_ticks_msec() / 1000.0
+		var red := Color("a82a1c")
+		var ring := 13.0 + 5.0 * (0.5 + 0.5 * sin(t * 4.0))
+		draw_arc(at, ring, 0.0, TAU, 32, Color(red, 0.55), 2.5, true)
+		var d := dir.normalized() if dir.length() > 0.01 else Vector2(0, -1)
+		var n := Vector2(-d.y, d.x)
+		var tip := at + d * 12.0
+		draw_colored_polygon(PackedVector2Array([tip, at - d * 7.0 + n * 7.5, at - d * 3.0, at - d * 7.0 - n * 7.5]), red)
+		draw_polyline(PackedVector2Array([tip, at - d * 7.0 + n * 7.5, at - d * 3.0, at - d * 7.0 - n * 7.5, tip]), Color("2a1a10"), 1.5, true)
+		if off_west:
+			draw_string(ThemeDB.fallback_font, at + Vector2(18, 5), "River Street, west", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, red)
+
+
+func _build_map() -> void:
+	map_card = Control.new()
+	map_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	map_card.visible = false
+	add_child(map_card)
+	var shade := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.1, 0.08, 0.06, 1.0)
+	sb.shadow_color = Color(0, 0, 0, 0.55)
+	sb.shadow_size = 18
+	sb.shadow_offset = Vector2(6, 8)
+	shade.add_theme_stylebox_override("panel", sb)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	map_card.add_child(shade)
+	map_pic = TextureRect.new()
+	var at := AtlasTexture.new()
+	at.atlas = load("res://textures/yard_map.png")
+	at.region = Rect2(Vector2.ZERO, MAP_SHOWN)
+	map_pic.texture = at
+	map_pic.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	map_pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	map_pic.stretch_mode = TextureRect.STRETCH_SCALE
+	map_pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	map_pic.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	map_card.add_child(map_pic)
+	map_mark = MapMark.new()
+	map_mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	map_mark.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	map_card.add_child(map_mark)
+	map_hint = hud._label("M   put it away", 17, Color(BONE, 0.85), hud.serif_italic) as Label
+	hud._shadow(map_hint)
+	map_card.add_child(map_hint)
+
+
+func _map_layout() -> Rect2:
+	var vp := size if size.x > 0 else get_viewport_rect().size
+	var h := vp.y * 0.76
+	var w := h * MAP_SHOWN.x / MAP_SHOWN.y
+	return Rect2(vp.x - w - 34.0, vp.y * 0.06, w, h)
+
+
+func show_map(on: bool) -> void:
+	if map_card == null or on == map_open:
+		return
+	map_open = on
+	var r := _map_layout()
+	map_card.size = r.size
+	map_card.pivot_offset = r.size / 2.0
+	map_hint.position = Vector2(4.0, r.size.y + 8.0)
+	if _map_tw:
+		_map_tw.kill()
+	_map_tw = create_tween()
+	if on:
+		map_card.visible = true
+		map_card.position = Vector2(r.position.x + r.size.x * 0.6, r.position.y)
+		map_card.rotation = 0.05
+		map_card.modulate.a = 0.0
+		_map_tw.set_parallel(true)
+		_map_tw.tween_property(map_card, "position", r.position, 0.3).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		_map_tw.tween_property(map_card, "rotation", -0.012, 0.3)
+		_map_tw.tween_property(map_card, "modulate:a", 1.0, 0.18)
+	else:
+		_map_tw.set_parallel(true)
+		_map_tw.tween_property(map_card, "position:x", r.position.x + r.size.x * 0.6, 0.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+		_map_tw.tween_property(map_card, "modulate:a", 0.0, 0.2)
+		_map_tw.chain().tween_callback(map_card.hide)
+
+
+func set_map_player(pos: Vector3, forward: Vector3) -> void:
+	## Godot (x, z) is Blender (x, -y); the plan puts Blender north (+y) up the page
+	if map_card == null:
+		return
+	var px := MAP_PAD.x + (pos.x - MAP_X0) * MAP_PX_PER_M
+	var py := MAP_PAD.y + (MAP_Y1 + pos.z) * MAP_PX_PER_M
+	var k := map_card.size.x / MAP_SIZE.x
+	var west := px < MAP_PAD.x
+	px = maxf(px, MAP_PAD.x + 10.0)
+	map_mark.at = Vector2(px, py) * k
+	map_mark.dir = Vector2(forward.x, forward.z)
+	map_mark.off_west = west
 
 
 # ------------------------------------------------------------------ the viewfinder
