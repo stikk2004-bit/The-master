@@ -53,9 +53,12 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
   - `scripts/mission_ui.gd`: the mission layer of the HUD: big countdown (set_clock), objective box
     (hud.set_objective / hud.set_timer land here), camera item slot, viewfinder, the photo print that
     pops up with who's in it (small, slides in at the left, then flies to its slot), the strip of
-    prints still needed, and Jekyll's sketch of the yard (show_map, set_map_player: an arrow where you
-    are, the way you're looking; the key is cropped off in the game).
-  - `scripts/drive.gd`: Jekyll's motorcar (W/S throttle and brake, A/D steer, E out when stopped).
+    prints still needed, Jekyll's sketch of the yard (show_map, set_map_player: an arrow where you
+    are, the way you're looking; the key is cropped off in the game), and the watcher marks (set_watchers,
+    fed by chapter tick): a small eye over every watchman who has started to notice you, opening and
+    reddening with his detection, a ring filling round it; off screen or behind you it waits at the screen's
+    edge with a pointer toward him.
+  - `scripts/drive.gd`: Jekyll's motorcar (W/S throttle and brake, A/D steer, E hops out at any speed).
   - `scripts/look.gd`: textured materials by Blender material name (MATS, EMIT, IMG tables),
     lighting presets, color grading, graphics quality.
   - `scripts/foliage.gd`: leaf, needle, palmetto, moss and grass cards scattered over canopies and lawns.
@@ -207,10 +210,11 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
 - `godot --headless --path godot -- --routetest` sweeps a man-sized capsule along the seven's four ways, up
   the car steps and in, and along the travelers' paths, printing anything solid in the way (with a control leg
   that must hit), then sends one man each way at 8x speed and checks all four get aboard.
-- `--shot` extras: `swing=Door_Library` opens a door first; `setup=doors|front|finder|jekyll|yard|map|lineup`
+- `--shot` extras: `swing=Door_Library` opens a door first; `setup=doors|front|finder|jekyll|yard|map|lineup|watched`
   stages a chapter moment (chapter1910 shot_setup; doors: men going in at both entry doors; finder looks
   through the Kodak from under the tarp; yard is the yard as played with its HUD; map holds up Jekyll's
-  sketch; lineup puts the seven side by side mid-stride). Big lit views are slow on the software renderer:
+  sketch; lineup puts the seven side by side mid-stride; watched has two watchmen half onto you, one in view
+  and one behind the camera). Big lit views are slow on the software renderer:
   pass frames=40 or so.
 - After adding textures or models, run `godot --headless --path godot --import` once.
 

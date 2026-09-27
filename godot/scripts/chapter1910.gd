@@ -1238,12 +1238,20 @@ func tick(delta: float) -> void:
 		hud.set_sneak(player.sneaking or worst > 0.05, worst)
 	elif stage == "car_photos" and not _caught_busy:
 		hud.set_sneak(worst > 0.05, worst)
+	# over anybody who has started to notice you, an eye that opens as he does (at the screen's edge,
+	# pointing his way, when he's off to the side or behind you)
+	var watchers := []
+	if stage in ["yard", "board", "car_photos"] and not _caught_busy and not in_scene:
+		for g in guards:
+			if g.active and g.watching and is_instance_valid(g) and (g.detection > 0.03 or g.state == "suspicious"):
+				watchers.append([(g as Node3D).global_position + Vector3(0.0, 2.3, 0.0), maxf(g.detection, 0.2 if g.state == "suspicious" else 0.0)])
+	hud.mission.set_watchers(watchers, get_viewport().get_camera_3d())
 	if driving:
 		# the player rides along, so the gate's prompt comes up when the car gets there
 		player.global_position = motorcar.global_position
 		if not _gate_hint and motorcar.global_position.distance_to(mk("gate_out")) < 10.0:
 			_gate_hint = true
-			hud.set_objective("This is the freight gate. Stop, press E to get out, and walk in through the gate.")
+			hud.set_objective("This is the freight gate. Press E to hop out, and walk in through the gate.")
 	if stage == "street" and not driving and not _caught_busy and player.has_camera:
 		# at the freight gate on foot, or in the yard any other way, and the clock starts
 		var pp: Vector3 = player.global_position
@@ -2387,6 +2395,22 @@ func shot_setup(what: String) -> void:
 			if front_door:
 				front_door.rotation.y = 1.4
 			_beacon(mk("steps_marker"), "board")
+		"watched":
+			# the yard with two watchmen half onto you: one in view, one behind the camera
+			_give_camera()
+			stage = "yard"
+			_yard_air()
+			hud.mission.set_slots(7)
+			hud.mission.set_clock("The train leaves in", 361.0)
+			var spots2 := [Vector3(-12.0, 0.0, 17.0), Vector3(-22.0, 0.0, 30.0)]
+			for k in 2:
+				var g = guards[k]
+				g.set_physics_process(false)
+				g.active = true
+				g.watching = true
+				g.detection = [0.7, 0.35][k]
+				g.global_position = spots2[k]
+				g.face_point(player.global_position, true)
 		"yard", "map":
 			# the yard as you find it once you're through the gate; map: with Jekyll's sketch held up
 			_give_camera()
