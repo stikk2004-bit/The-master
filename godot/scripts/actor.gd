@@ -32,7 +32,7 @@ func setup(model_path: String, name_shown := "", collide := false) -> void:
 	if players.size() > 0:
 		anim = players[0]
 		for a in anim.get_animation_list():
-			if not String(a) in ["Serve"]:
+			if not String(a) in ["Serve", "TipHat", "Throw", "Mantle"]:
 				anim.get_animation(a).loop_mode = Animation.LOOP_LINEAR
 	var sk := model.find_children("*", "Skeleton3D", true, false)
 	if sk.size() > 0:

@@ -35,7 +35,7 @@ var gb_status: Label
 var gb_entries: VBoxContainer
 var chime: AudioStreamPlayer
 var bars: Array = []
-var banner: VBoxContainer
+var banner: Control
 var banner_title: Label
 var banner_sub: Label
 var sub_box: VBoxContainer
@@ -192,22 +192,33 @@ func show_title() -> void:
 
 # ------------------------------------------------------------------ location banner
 func _build_banner() -> void:
-	banner = VBoxContainer.new()
-	banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	banner.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	banner.offset_top = 120
-	banner.alignment = BoxContainer.ALIGNMENT_CENTER
-	banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	banner.add_theme_constant_override("separation", 6)
-	banner_title = _label("", 42, BONE, caps)
-	banner_sub = _label("", 22, Color(BONE, 0.8), serif_italic)
+	## where you are, on a punched ticket slip that drops in from the top and is taken back up
+	var slip := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = PARCHMENT
+	sb.border_color = Color(INK, 0.55)
+	sb.set_border_width_all(1)
+	sb.content_margin_left = 30
+	sb.content_margin_right = 30
+	sb.content_margin_top = 12
+	sb.content_margin_bottom = 14
+	sb.shadow_color = Color(0, 0, 0, 0.5)
+	sb.shadow_size = 12
+	slip.add_theme_stylebox_override("panel", sb)
+	slip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 3)
+	var punch := _label("o   o   o   o   o   o   o   o   o   o   o", 12, Color(INK, 0.35), caps)
+	punch.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	banner_title = _label("", 34, INK, caps_bold)
+	banner_sub = _label("", 20, Color(INK, 0.8), fell_italic)
 	for l in [banner_title, banner_sub]:
-		_shadow(l)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	banner.add_child(_rule(420))
-	banner.add_child(banner_title)
-	banner.add_child(banner_sub)
-	banner.add_child(_rule(420))
+	v.add_child(punch)
+	v.add_child(banner_title)
+	v.add_child(banner_sub)
+	slip.add_child(v)
+	banner = slip
 	banner.modulate.a = 0.0
 	root.add_child(banner)
 
@@ -216,14 +227,20 @@ func show_location(title: String, sub := "") -> void:
 	banner_title.text = title.to_upper()
 	banner_sub.text = sub
 	banner_sub.visible = sub != ""
-	_center(banner)
+	banner.reset_size()
+	banner.pivot_offset = banner.size / 2.0
+	banner.rotation = -0.02
+	var x := (root.size.x - banner.size.x) / 2.0
+	banner.position = Vector2(x, -banner.size.y - 20.0)
 	if _banner_tw:
 		_banner_tw.kill()
 	_banner_tw = create_tween()
 	_banner_tw.tween_interval(0.5)
-	_banner_tw.tween_property(banner, "modulate:a", 1.0, 1.2)
-	_banner_tw.tween_interval(3.2)
-	_banner_tw.tween_property(banner, "modulate:a", 0.0, 1.6)
+	_banner_tw.tween_property(banner, "modulate:a", 1.0, 0.01)
+	_banner_tw.tween_property(banner, "position:y", 96.0, 0.7).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_banner_tw.tween_interval(3.4)
+	_banner_tw.tween_property(banner, "position:y", -banner.size.y - 20.0, 0.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	_banner_tw.tween_property(banner, "modulate:a", 0.0, 0.01)
 
 
 # ------------------------------------------------------------------ objective
@@ -363,47 +380,46 @@ func show_card(title: String, sub: String, seconds := 4.5) -> float:
 
 # ------------------------------------------------------------------ prompt
 func _build_prompt() -> void:
-	var box := VBoxContainer.new()
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_theme_constant_override("separation", 5)
-	var bg := PanelContainer.new()
+	## what E will do, on a little enamel sign like the ones screwed to a depot wall
+	var plate := PanelContainer.new()
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.02, 0.02, 0.02, 0.62)
-	sb.content_margin_left = 34
-	sb.content_margin_right = 38
-	sb.content_margin_top = 7
-	sb.content_margin_bottom = 8
-	sb.shadow_color = Color(0, 0, 0, 0.45)
-	sb.shadow_size = 18
-	bg.add_theme_stylebox_override("panel", sb)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sb.bg_color = Color(GREEN, 0.94)
+	sb.border_color = Color("e6dcc0")
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(12)
+	sb.content_margin_left = 14
+	sb.content_margin_right = 24
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 7
+	sb.shadow_color = Color(0, 0, 0, 0.5)
+	sb.shadow_size = 10
+	plate.add_theme_stylebox_override("panel", sb)
+	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 16)
+	h.add_theme_constant_override("separation", 14)
 	h.alignment = BoxContainer.ALIGNMENT_CENTER
 	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# the key, on a round brass token
 	var key := PanelContainer.new()
 	var ks := StyleBoxFlat.new()
-	ks.bg_color = Color(0, 0, 0, 0.0)
-	ks.border_color = BRASS
-	ks.set_border_width_all(1)
-	ks.set_corner_radius_all(3)
-	ks.content_margin_left = 9
-	ks.content_margin_right = 9
-	ks.content_margin_top = 0
-	ks.content_margin_bottom = 1
+	ks.bg_color = Color("b8903e")
+	ks.border_color = Color("5a4418")
+	ks.set_border_width_all(2)
+	ks.set_corner_radius_all(20)
+	ks.content_margin_left = 11
+	ks.content_margin_right = 11
+	ks.content_margin_top = 1
+	ks.content_margin_bottom = 2
 	key.add_theme_stylebox_override("panel", ks)
 	key.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	key.add_child(_label("E", 19, BRASS.lightened(0.25), caps))
+	key.add_child(_label("E", 20, INK, caps_bold))
 	h.add_child(key)
-	prompt_label = _label("", 24, BONE, serif)
+	prompt_label = _label("", 23, Color("efe6cf"), fell)
 	h.add_child(prompt_label)
-	bg.add_child(h)
-	box.add_child(_rule(460, Color(BRASS, 0.75)))
-	box.add_child(bg)
-	box.add_child(_rule(460, Color(BRASS, 0.75)))
-	box.visible = false
-	prompt_box = box
-	root.add_child(box)
+	plate.add_child(h)
+	plate.visible = false
+	prompt_box = plate
+	root.add_child(plate)
 
 
 func set_prompt(text: String) -> void:
@@ -429,14 +445,15 @@ func _build_mouse_hint() -> void:
 
 # ------------------------------------------------------------------ sneak eye
 func _build_eye() -> void:
+	## the signal lamp: green, amber, red as the watchmen notice you (signal_lamp.gd)
 	eye = Control.new()
-	eye.set_script(preload("res://scripts/sneak_eye.gd"))
-	eye.custom_minimum_size = Vector2(120, 60)
-	eye.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	eye.offset_left = -60
-	eye.offset_right = 60
-	eye.offset_top = -330
-	eye.offset_bottom = -270
+	eye.set_script(preload("res://scripts/signal_lamp.gd"))
+	eye.custom_minimum_size = Vector2(96, 104)
+	eye.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	eye.offset_left = -48
+	eye.offset_right = 48
+	eye.offset_top = 112
+	eye.offset_bottom = 216
 	eye.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	eye.visible = false
 	root.add_child(eye)
@@ -736,13 +753,21 @@ func toast(text: String, seconds := 4.5) -> void:
 		root.add_child(_toast)
 	_toast.text = text
 	_center(_toast)
-	_toast.position.y = 70
+	# a third of the way down: clear of the clock, the ticket banner and the signal lamp up top
+	_toast.position.y = maxf(240.0, root.size.y * 0.3)
 	_toast.modulate.a = 1.0
 	if _toast_tw:
 		_toast_tw.kill()
 	_toast_tw = create_tween()
 	_toast_tw.tween_interval(seconds)
 	_toast_tw.tween_property(_toast, "modulate:a", 0.0, 1.0)
+
+
+func clear_toast() -> void:
+	if _toast_tw:
+		_toast_tw.kill()
+	if _toast:
+		_toast.modulate.a = 0.0
 
 
 func _on_meta(meta: Variant) -> void:

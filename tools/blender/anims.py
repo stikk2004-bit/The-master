@@ -381,6 +381,116 @@ def serve(ps, name="Serve", seconds=2.0):
     _finish(rig, act, name, frames, cyclic=False)
 
 
+def throw(ps, name="Throw", seconds=0.9):
+    """An overhand lob: step in with the left foot, wind the right arm back, let fly, follow through."""
+    frames = int(seconds * FPS)
+    rig = ps.rig
+    _clear(rig)
+    act = _begin(rig, name)
+    k = ps.k
+    for f in range(frames + 1):
+        t = f / frames
+        wind = smooth(t / 0.4) * (1 - smooth((t - 0.4) / 0.15))
+        fly = smooth((t - 0.4) / 0.2)
+        settle = smooth((t - 0.7) / 0.3)
+        ps.reset()
+        drop = (0.02 + 0.03 * fly * (1 - settle)) * k
+        ps.move("Hips", (0, 0, -drop))
+        ps.leg("L", drop, (0.05 + 0.13 * max(wind, fly * (1 - settle))) * k, 0.0, spread=0.05)
+        ps.leg("R", drop, -0.1 * k, 0.0, spread=0.04)
+        twist = 0.35 * wind - 0.4 * fly * (1 - settle)
+        ps.rot("Spine", rx=-0.08 * wind + 0.15 * fly * (1 - settle), rz=twist * 0.5)
+        ps.rot("Chest", rz=twist * 0.6)
+        ps.rot("Head", rz=-twist * 0.7)
+        arm = 0.9 * wind - 2.3 * fly + 1.4 * fly * settle
+        ps.rot("UpperArm.R", rx=arm, ry=-0.35 * wind - 0.15)
+        ps.rot("LowerArm.R", rx=-1.5 * wind - 0.2 * (1 - wind))
+        ps.rot("Hand.R", rx=0.4 * wind - 0.3 * fly)
+        ps.rot("UpperArm.L", rx=-0.9 * wind + 0.4 * fly, ry=0.2)
+        ps.rot("LowerArm.L", rx=-0.6)
+        ps.key(f + 1)
+    _finish(rig, act, name, frames, cyclic=False)
+
+
+def climb(ps, name="Climb", seconds=1.0):
+    """Up a ladder: hand over hand, knee over knee, the body close in to the rungs."""
+    frames = int(seconds * FPS)
+    rig = ps.rig
+    _clear(rig)
+    act = _begin(rig, name)
+    k = ps.k
+    for f in range(frames + 1):
+        t = f / frames
+        w = 2 * math.pi * t
+        ps.reset()
+        drop = 0.04 * k
+        ps.move("Hips", (0, 0, -drop))
+        for side, ph in (("L", 0.0), ("R", math.pi)):
+            s = 0.5 + 0.5 * math.sin(w + ph)
+            ps.leg(side, drop, (0.06 + 0.1 * s) * k, 0.32 * s * k, foot_pitch=-0.2 * s, spread=0.06)
+            ps.rot("UpperArm." + side, rx=-2.3 - 0.45 * (1 - s), ry=(0.12 if side == "L" else -0.12))
+            ps.rot("LowerArm." + side, rx=-0.5 - 0.6 * s)
+            ps.rot("Hand." + side, rx=-0.3)
+        ps.rot("Spine", rx=-0.06)
+        ps.rot("Head", rx=-0.3)
+        ps.key(f + 1)
+    _finish(rig, act, name, frames)
+
+
+def mantle(ps, name="Mantle", seconds=0.55):
+    """Hands on the ledge, push down, knees up and over."""
+    frames = int(seconds * FPS)
+    rig = ps.rig
+    _clear(rig)
+    act = _begin(rig, name)
+    k = ps.k
+    for f in range(frames + 1):
+        t = f / frames
+        push = smooth(t / 0.5)
+        tuck = smooth((t - 0.25) / 0.45) * (1 - smooth((t - 0.8) / 0.2))
+        ps.reset()
+        drop = 0.05 * k
+        ps.move("Hips", (0, 0, -drop))
+        ps.leg("L", drop, 0.12 * k * tuck, 0.3 * k * tuck, spread=0.05)
+        ps.leg("R", drop, 0.05 * k * tuck, 0.22 * k * tuck, spread=0.05)
+        ps.rot("Spine", rx=0.35 * push * (1 - 0.5 * tuck))
+        ps.rot("Chest", rx=0.15 * push)
+        ps.rot("Head", rx=-0.25 * push)
+        for side in ("L", "R"):
+            ps.rot("UpperArm." + side, rx=-1.9 + 1.1 * push, ry=(0.18 if side == "L" else -0.18))
+            ps.rot("LowerArm." + side, rx=-0.9 + 0.7 * push)
+            ps.rot("Hand." + side, rx=0.6 * push)
+        ps.key(f + 1)
+    _finish(rig, act, name, frames, cyclic=False)
+
+
+def tip_hat(ps, name="TipHat", seconds=1.6):
+    """Good evening: two fingers to the hat brim and a small nod."""
+    frames = int(seconds * FPS)
+    rig = ps.rig
+    _clear(rig)
+    act = _begin(rig, name)
+    k = ps.k
+    for f in range(frames + 1):
+        t = f / frames
+        up = smooth(t / 0.35) * (1 - smooth((t - 0.6) / 0.35))
+        nod = math.sin(math.pi * smooth((t - 0.25) / 0.4)) if 0.25 < t < 0.65 else 0.0
+        ps.reset()
+        drop = 0.012 * k
+        ps.move("Hips", (0, 0, -drop))
+        ps.leg("L", drop, -0.03 * k, 0.0, spread=0.04)
+        ps.leg("R", drop, 0.05 * k, 0.0, spread=0.04)
+        ps.rot("Head", rx=0.18 * nod)
+        ps.rot("Chest", rx=0.04 * nod)
+        ps.rot("UpperArm.R", rx=-2.05 * up + 0.03, ry=-0.17 + 0.05 * up)
+        ps.rot("LowerArm.R", rx=-1.95 * up - 0.2)
+        ps.rot("Hand.R", rx=-0.2 * up)
+        ps.rot("UpperArm.L", rx=0.03, ry=0.17)
+        ps.rot("LowerArm.L", rx=-0.22)
+        ps.key(f + 1)
+    _finish(rig, act, name, frames, cyclic=False)
+
+
 ## the speeds the game divides by when it plays each cycle (actor.gd WALK_REF, player.gd)
 WALK_V = 1.7
 RUN_V = 3.9
@@ -412,6 +522,12 @@ def build_all(rig, k, kinds, gait=None):
         sit(ps, "SitDrink", drink=True, seconds=5.0)
     if "talk" in kinds:
         talk(ps, "Talk")
+    if "act" in kinds:
+        throw(ps, "Throw")
+        climb(ps, "Climb")
+        mantle(ps, "Mantle")
+    if "tip" in kinds:
+        tip_hat(ps, "TipHat")
     if "lantern" in kinds:
         idle(ps, "LookAround", 6.0, lantern=True, look=True)
         cycle(ps, "LanternWalk", P=1.1, stance=0.62, a=0.34, lift=0.09, hip_base=0.045, bob=0.015, lean=0.03, arm_swing=0.25, elbow=0.2, lantern=True, v_ref=WALK_V)

@@ -57,6 +57,8 @@ var rooms: Node
 var after_panel: Callable = Callable()
 var ambience: AudioStreamPlayer
 var gave_ticket := false
+var _ticket_taken := false   # the chapter is on its way; more presses do nothing
+var _hooded_next := 0        # msec: the hooded figure's next line can't come before this
 
 
 func _ready() -> void:
@@ -123,6 +125,7 @@ func _setup_input() -> void:
 	_bind("sneak", [KEY_C, KEY_CTRL])
 	_bind("quality", [KEY_F9])
 	_bind("camera", [KEY_Q])
+	_bind("throw", [KEY_F])
 
 
 func _bind(action: String, keys: Array) -> void:
@@ -360,6 +363,7 @@ func add_interactable(pos: Vector3, radius: float, prompt: String, cb: Callable)
 
 # ---------- out front ----------
 func _build_exterior() -> void:
+	_ticket_taken = false
 	_outdoor_air()
 	var grounds := _instance("res://models/clubhouse_exterior.glb")
 	Foliage.dress(grounds, level, 7)
@@ -384,22 +388,34 @@ func _build_exterior() -> void:
 
 
 func _talk_hooded() -> void:
+	## one line per press, never faster than a line a second, and the ticket comes with the third
+	## line in the same breath (nothing waits on a timer to pop up over whatever comes next)
+	if _ticket_taken:
+		return
 	if gave_ticket:
 		_take_ticket()
 		return
-	hud.toast(HOODED_LINES[npc_line % HOODED_LINES.size()], 5.5)
+	var now := Time.get_ticks_msec()
+	if now < _hooded_next:
+		return
+	_hooded_next = now + 1100
+	var said: String = HOODED_LINES[npc_line % HOODED_LINES.size()]
 	npc_line += 1
-	if npc_line >= 3 and not gave_ticket:
+	if npc_line >= 3:
 		gave_ticket = true
-		await get_tree().create_timer(5.8).timeout
-		hud.toast("He holds out an old railroad ticket. Hoboken, November 22, 1910.", 5.0)
+		said += "\n\nHe holds out an old railroad ticket. Hoboken, November 22, 1910."
 		if not npc_it.is_empty():
 			npc_it["prompt"] = "Take the old railroad ticket"
+	hud.toast(said, 6.0)
 
 
 func _take_ticket() -> void:
-	hud.toast("\"Watch who gets on that car. Listen to what they call each other.\"", 4.0)
+	if _ticket_taken or Time.get_ticks_msec() < _hooded_next:
+		return
+	_ticket_taken = true
+	hud.toast("\"Watch who gets on that car. Listen to what they call each other.\"", 2.4)
 	await get_tree().create_timer(2.5).timeout
+	hud.clear_toast()
 	chapter.start()
 
 

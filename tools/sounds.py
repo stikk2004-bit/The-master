@@ -254,9 +254,24 @@ def motor():
     write("motor", seamless(chug + rattle, 0.3), 0.7)
 
 
+def stone():
+    """A thrown stone landing on cinders and bouncing once off a rail."""
+    sec = 0.9
+    s = np.zeros(int(RATE * sec))
+    hit = bandpass(noise(0.05), 700, 3200) * env_ad(int(RATE * 0.05), 0.001, 0.012)
+    place(s, hit, 0.01)
+    t = t_axis(0.35)
+    ring = (np.sin(2 * np.pi * 2350 * t) + 0.6 * np.sin(2 * np.pi * 3710 * t)) * np.exp(-t / 0.06)
+    place(s, ring * 0.35 + bandpass(noise(0.35), 1500, 5000) * np.exp(-t / 0.02) * 0.5, 0.16)
+    place(s, hit * 0.4, 0.34)
+    scatter = bandpass(noise(0.3), 400, 2500) * env_ad(int(RATE * 0.3), 0.005, 0.08) * 0.35
+    place(s, scatter, 0.4)
+    write("stone", s, 0.85)
+
+
 if __name__ == "__main__":
     import sys
     only = sys.argv[1:]
-    for fn in (yard, train, fire, marsh, crickets, room, whistle, door, shutter, shot, motor):
+    for fn in (yard, train, fire, marsh, crickets, room, whistle, door, shutter, shot, motor, stone):
         if not only or fn.__name__ in only:
             fn()

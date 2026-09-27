@@ -72,7 +72,8 @@ func forward() -> Vector3:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if driving and event.is_action_pressed("interact"):
-		if absf(speed) < 0.8:
+		# at a crawl she's easy to hop out of: the brake goes on and out you get
+		if absf(speed) < 3.0:
 			exit_requested.emit()
 		get_viewport().set_input_as_handled()
 
