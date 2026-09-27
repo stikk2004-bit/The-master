@@ -15,6 +15,7 @@ Controls
   E            use whatever you're standing near, or move a conversation along; hide; get out of the motorcar
   Q            once you have the pocket Kodak: hold it up to your eye (again to put it away)
   F            throw a stone where you're looking; a watchman nearby goes to see what landed
+  M            in 1910: Jekyll's sketch of the yard, with you on it (the yard doesn't stop while you look)
   Click        through the Kodak: take the picture          Mouse wheel: zoom
   Space        jump, or climb onto a crate or ledge in front of you
   Driving      W go, S brake, A and D steer, E get out once she's stopped
@@ -26,7 +27,8 @@ Controls
 Where to go
   The Grand Lobby's four doors: the Library, the Trading Floor, the Drafting Room, the Honey House.
   1910: the hooded figure on the lawn has an old railroad ticket for you, and so does the lobby desk.
-        Read the letter, meet Jekyll, drive to the freight gate. Get a picture of all seven men before
+        Read the letter, meet Jekyll, drive to the freight gate. A printable map of the yard is in
+        art/maps/hoboken_yard_map.pdf (in the full project folder). Get a picture of all seven men before
         they go into the Senator's car. They come by cab, down the station platform, or across the yard,
         a different way each try, and not everybody in a good coat is one of the seven. Keep out of the
         lantern beams, mind the lookouts up high, then get aboard at the car's dark

@@ -29,6 +29,7 @@ DOOR_H = 2.05
 TRACK_A = -4.0
 TRACK_B = 4.0
 GATE = (-26.6, -24.4)  # the freight gate in the yard's south fence
+CINZEL = os.path.join(kit.ROOT, "tools", "fonts", "Cinzel-Bold.woff")
 
 
 def mark(coll, name, loc, rz=0.0):
@@ -73,6 +74,12 @@ def M():
         "river": mat("HB_River", "#05070a", 0.08),
         "fence": mat("HB_Fence", "#3a3028", 0.9),
         "canvas": mat("HB_Canvas", "#5a5446", 0.9),
+        "path": mat("HB_Path", "#8e836e", 0.95),
+        "planks": mat("HB_Planks", "#5e4a36", 0.85),
+        "sign": mat("HB_SignPaint", "#d8ccb0", 0.8),
+        "sw_red": mat("HB_SwitchRed", "#ff3020", 0.3, 0.0, "#ff2a10", 3.0),
+        "sw_green": mat("HB_SwitchGreen", "#50ff90", 0.3, 0.0, "#40ff80", 3.0),
+        "sack": mat("HB_Sack", "#8a7a5c", 0.95),
         # the train
         "maroon": mat("TR_Maroon", "#3e1512", 0.45),
         "green": mat("TR_Green", "#1e2a1e", 0.5),
@@ -182,6 +189,238 @@ def building(mb, m, x0, x1, y0, y1, h, wall, roof_m, windows=None, lit=0.0, faci
                 if is_lit:
                     lights.append((xc, Y + fy * 1.2, zc))
     return lights
+
+
+def walk(mb, m, pts, w=1.8, mat_key="path"):
+    """a gravel walk along a polyline, a hair above the cinders, with round ends so the joins don't gap"""
+    for (ax, ay), (bx, by) in zip(pts, pts[1:]):
+        dx, dy = bx - ax, by - ay
+        L = math.hypot(dx, dy)
+        nx, ny = -dy / L * w / 2, dx / L * w / 2
+        mb.quad([(ax + nx, ay + ny, 0.03), (ax - nx, ay - ny, 0.03), (bx - nx, by - ny, 0.03), (bx + nx, by + ny, 0.03)], m[mat_key])
+    for x, y in pts:
+        mb.cyl((x, y, 0.0), w / 2, w / 2, 0.03, m[mat_key], seg=16)
+
+
+def crossing(mb, m, x, y, w=2.0, east_to=None):
+    """a plank grade crossing over the track at x: planks flush with the rail tops, sloped ends down to the cinders"""
+    top = RAIL_TOP + 0.01
+    y0, y1 = y - w / 2, y + w / 2
+    spans = [(x - 1.95, x - 0.78), (x - 0.66, x + 0.66), (x + 0.78, (east_to if east_to else x + 1.95))]
+    for a, b in spans:
+        yy = y0
+        while yy < y1 - 0.05:
+            mb.box((a, yy, 0.28), (b, min(yy + 0.36, y1), top), m["planks"])
+            yy += 0.4
+    ends = [(-1, x - 1.95, x - 3.1)] + ([] if east_to else [(1, x + 1.95, x + 3.1)])
+    for sgn, xa, xb in ends:
+        # the ramp: top slope, the two sides, the high end is against the planks
+        mb.quad([(xa, y0, top), (xa, y1, top), (xb, y1, 0.0), (xb, y0, 0.0)][::(1 if sgn < 0 else -1)], m["planks"])
+        mb.quad([(xa, y0, 0.0), (xa, y0, top), (xb, y0, 0.0)][::(1 if sgn < 0 else -1)], m["planks"])
+        mb.quad([(xa, y1, 0.0), (xb, y1, 0.0), (xa, y1, top)][::(1 if sgn < 0 else -1)], m["planks"])
+
+
+def post_lamp(mb, m, c, h=2.7):
+    """a short iron post with a lantern on a bracket, the kind that marks a walk"""
+    x, y, z = c
+    mb.cyl((x, y, z), 0.12, 0.1, 0.3, m["stone"], seg=8)
+    mb.rod((x, y, z + 0.3), (x, y, z + h), 0.045, m["iron"])
+    mb.rod((x, y, z + h - 0.1), (x + 0.35, y, z + h - 0.1), 0.02, m["iron"])
+    mb.boxc((x + 0.35, y, z + h - 0.38), (0.2, 0.2, 0.3), m["lamp_glass"])
+    mb.lathe((x + 0.35, y, z + h - 0.22), [(0.17, 0.0), (0.03, 0.14)], m["iron"], seg=4)
+    return (x + 0.35, y, z + h - 0.4)
+
+
+def switch_stand(mb, m, c, lens):
+    """a switch stand beside the rails: a low iron post with a lamp that shows red or green down the track"""
+    x, y, z = c
+    mb.box((x - 0.25, y - 0.2, z), (x + 0.25, y + 0.2, z + 0.12), m["tie"])
+    mb.rod((x, y, z + 0.12), (x, y, z + 1.25), 0.05, m["iron"])
+    mb.rod((x, y, z + 0.5), (x + 0.5, y, z + 0.5), 0.025, m["iron"])     # the throw lever
+    mb.boxc((x, y, z + 1.4), (0.24, 0.24, 0.28), m["iron"])
+    mb.cyl((x, y - 0.13, z + 1.4), 0.08, 0.08, 0.03, m[lens], seg=12, rot=Matrix.Rotation(math.pi / 2, 4, "X"))
+    mb.cyl((x, y + 0.1, z + 1.4), 0.08, 0.08, 0.03, m[lens], seg=12, rot=Matrix.Rotation(-math.pi / 2, 4, "X"))
+    mb.lathe((x, y, z + 1.54), [(0.16, 0.0), (0.02, 0.12)], m["iron"], seg=6)
+    return (x, y, z + 1.4)
+
+
+def semaphore(mb, m, c, h=7.0):
+    """a signal mast at the throat of the yard: an arm and a red lamp you can see from anywhere"""
+    x, y, z = c
+    mb.box((x - 0.4, y - 0.4, z), (x + 0.4, y + 0.4, z + 0.4), m["stone"])
+    mb.rod((x, y, z + 0.4), (x, y, z + h), 0.1, m["tie"], r2=0.08)
+    mb.box((x - 0.08, y - 0.05, z + h - 0.9), (x + 1.6, y + 0.05, z + h - 0.6), m["plat_edge"])
+    mb.boxc((x - 0.2, y, z + h - 0.75), (0.26, 0.26, 0.3), m["iron"])
+    mb.cyl((x - 0.2, y - 0.14, z + h - 0.75), 0.09, 0.09, 0.03, m["sw_red"], seg=12, rot=Matrix.Rotation(math.pi / 2, 4, "X"))
+    for k in range(int(h / 0.4) - 2):
+        mb.rod((x + 0.12, y - 0.15, z + 0.8 + k * 0.4), (x + 0.12, y + 0.15, z + 0.8 + k * 0.4), 0.015, m["iron"])
+    mb.lathe((x, y, z + h), [(0.14, 0.0), (0.02, 0.2)], m["iron"], seg=8)
+    return (x - 0.2, y - 0.3, z + h - 0.75)
+
+
+def lumber_pile(mb, m, c, layers=5, length=6.0, rz=0.0):
+    x, y, z = c
+    rot = Matrix.Rotation(rz, 3, "Z")
+    for k in range(3):
+        v = rot @ Vector((0, -length / 2 + 0.4 + k * (length - 0.8) / 2, 0))
+        mb.boxc((x + v.x, y + v.y, z + 0.08), (2.3, 0.16, 0.16), m["tie"], rz=rz)
+    zz = z + 0.16
+    for k in range(layers):
+        for j in range(7):
+            v = rot @ Vector((-0.96 + j * 0.32, 0, 0))
+            mb.boxc((x + v.x, y + v.y, zz + 0.07), (0.28, length - R.uniform(0.0, 0.5), 0.14), m["planks"], rz=rz + R.uniform(-0.01, 0.01))
+        zz += 0.15
+        if k % 2 == 1 and k < layers - 1:
+            for i in range(3):
+                v = rot @ Vector((0, -length / 2 + 0.4 + i * (length - 0.8) / 2, 0))
+                mb.boxc((x + v.x, y + v.y, zz + 0.04), (2.2, 0.08, 0.08), m["tie"], rz=rz)
+            zz += 0.08
+    return zz
+
+
+def tie_pile(mb, m, c, layers=6, rz=0.0):
+    """new crossties stacked criss-cross to season"""
+    x, y, z = c
+    zz = z
+    for k in range(layers):
+        a = rz + (0.0 if k % 2 == 0 else math.pi / 2)
+        rot = Matrix.Rotation(a, 3, "Z")
+        for j in range(5):
+            v = rot @ Vector((-1.0 + j * 0.5, 0, 0))
+            mb.boxc((x + v.x, y + v.y, zz + 0.09), (0.24, 2.6, 0.18), m["tie"], rz=a + R.uniform(-0.03, 0.03))
+        zz += 0.18
+
+
+def wheelset(mb, m, c):
+    """a pair of car wheels on their axle, waiting for the shop"""
+    x, y, z = c
+    rx = Matrix.Rotation(math.pi / 2, 4, "Y")
+    for sx in (-0.72, 0.72):
+        mb.cyl((x + sx - 0.05, y, z + 0.46), 0.46, 0.46, 0.1, m["iron"], seg=16, rot=rx @ Matrix.Translation((0, 0, -0.05)))
+        mb.cyl((x + sx - 0.02, y, z + 0.46), 0.5, 0.5, 0.04, m["rail"], seg=16, rot=rx)
+    mb.rod((x - 0.9, y, z + 0.46), (x + 0.9, y, z + 0.46), 0.07, m["iron"])
+
+
+def dray(mb, m, c, rz=0.0):
+    """a freight wagon with its shafts down, a load of barrels and a tarp over half of it"""
+    x, y, z = c
+    rot = Matrix.Rotation(rz, 3, "Z")
+
+    def P(dx, dy, dz):
+        v = rot @ Vector((dx, dy, dz))
+        return (x + v.x, y + v.y, z + v.z)
+    mb.boxc(P(0, 0, 0.95), (1.7, 3.6, 0.1), m["wood"], rz=rz)
+    for sx in (-0.85, 0.85):
+        mb.boxc(P(sx, 0, 1.2), (0.06, 3.6, 0.4), m["wood"], rz=rz)
+    rx = Matrix.Rotation(rz, 4, "Z") @ Matrix.Rotation(math.pi / 2, 4, "Y")
+    for sx in (-0.95, 0.95):
+        for sy, r in ((-1.2, 0.55), (1.2, 0.45)):
+            mb.cyl(P(sx, sy, r), r, r, 0.08, m["iron"], seg=16, rot=rx @ Matrix.Translation((0, 0, -0.04)))
+    for sx in (-0.4, 0.4):
+        mb.rod(P(sx, 1.8, 0.95), P(sx * 0.6, 4.2, 0.05), 0.04, m["wood"])
+    for k in range(4):
+        barrel(mb, m, P(-0.4 + (k % 2) * 0.8, -1.2 + (k // 2) * 0.75, 1.0), h=0.85, r=0.3)
+    mb.quad([P(-0.95, 0.1, 1.0), P(0.95, 0.1, 1.0), P(0.95, 1.75, 1.0), P(-0.95, 1.75, 1.0)], m["canvas"])
+    mb.boxc(P(0, 0.95, 1.3), (1.6, 1.6, 0.5), m["canvas"], rz=rz)
+
+
+def milk_can(mb, m, c):
+    x, y, z = c
+    mb.lathe((x, y, z), [(0.16, 0.0), (0.17, 0.35), (0.12, 0.48), (0.08, 0.52), (0.09, 0.6)], m["tin"], seg=12)
+
+
+def sack(mb, m, c, rz=0.0):
+    x, y, z = c
+    mb.sphere((x, y, z + 0.16), 0.3, m["sack"], sub=2, scale=(1.5, 0.9, 0.55))
+
+
+def hut(mb, m, x0, x1, y0, y1, h, wall, window_face=None, lit=True):
+    """a board-and-batten hut with a tin roof, one window, a stovepipe"""
+    mb.box((x0, y0, 0.0), (x1, y1, h), wall)
+    mb.box((x0 - 0.05, y0 - 0.05, 0.0), (x1 + 0.05, y1 + 0.05, 0.3), m["stone"])
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    mb.quad([(x0 - 0.3, y0 - 0.3, h), (x1 + 0.3, y0 - 0.3, h), (x1 + 0.3, cy, h + 0.9), (x0 - 0.3, cy, h + 0.9)], m["tin"])
+    mb.quad([(x0 - 0.3, cy, h + 0.9), (x1 + 0.3, cy, h + 0.9), (x1 + 0.3, y1 + 0.3, h), (x0 - 0.3, y1 + 0.3, h)], m["tin"])
+    mb.quad([(x0, y0, h), (x0, cy, h + 0.9), (x0, y1, h)], m["wood"])
+    mb.quad([(x1, y1, h), (x1, cy, h + 0.9), (x1, y0, h)], m["wood"])
+    mb.rod((x0 + 0.5, cy + 0.6, h + 0.5), (x0 + 0.5, cy + 0.6, h + 1.7), 0.08, m["iron"])
+    if window_face is None:
+        return None
+    fx, fy = window_face
+    X = x1 if fx > 0 else x0
+    mb.arch_window((X + fx * 0.02, cy - 0.5, 1.5), 0.9, 1.0, m["wood"], m["window_lit"] if lit else m["glass_dark"], (fx, fy))
+    # the door beside it
+    mb.box((X + fx * 0.01 - 0.03, cy + 0.4, 0.3), (X + fx * 0.01 + 0.03, cy + 1.3, 2.3), m["crate_dark"])
+    return (X + fx * 1.0, cy - 0.5, 1.5)
+
+
+def yard_more(coll, m):
+    """walks, crossings, lamps that mark the ways through, and more freight for cover"""
+    # ---- walks: gravel from the freight gate across to the tracks; the lane between the tracks; the way
+    # from the freight house to the Senator's car's front end
+    wk = MB()
+    walk(wk, m, [(-25.5, -27.2), (-25.3, -24.0), (-16.0, -22.4), (-7.1, -19.8)])
+    walk(wk, m, [(0.0, -21.4), (0.0, 50.0)], w=1.6)
+    walk(wk, m, [(-14.6, 9.95), (-7.1, 9.95)], w=0.95)
+    walk(wk, m, [(-25.3, -24.0), (-27.4, -20.0), (-27.4, 60.0)], w=1.2)     # the fence walk, behind the freight house
+    walk(wk, m, [(-11.2, 32.0), (-11.2, 44.0), (-15.5, 50.5)], w=1.2)          # up to the lumber and the ties
+    wk.obj("Walks-col", coll)
+    # ---- plank crossings over the rails
+    cx = MB()
+    crossing(cx, m, TRACK_A, -19.8)
+    crossing(cx, m, TRACK_B, -21.0, east_to=6.25)
+    crossing(cx, m, TRACK_A, 9.95)
+    cx.obj("Crossings-col", coll)
+    # ---- lamps along the walks (small pools of light: easy to follow, easy to be seen in)
+    pl = MB()
+    for i, c in enumerate(((-17.8, -20.6, 0.0), (-1.2, -21.9, 0.0), (1.2, 22.5, 0.0), (-14.1, 9.0, 0.0), (-1.2, 42.0, 0.0))):
+        light(coll, "path", i, post_lamp(pl, m, c))
+    # switch stands with their lamps: red and green points to steer by in the dark
+    for i, (c, lens) in enumerate((((-6.2, 2.6, 0.0), "sw_green"), ((-6.3, 12.4, 0.0), "sw_red"), ((-6.3, 50.4, 0.0), "sw_green"),
+                                   ((1.9, -23.2, 0.0), "sw_red"), ((1.9, 46.0, 0.0), "sw_green"))):
+        light(coll, "sigred" if lens == "sw_red" else "siggreen", i, switch_stand(pl, m, c, lens))
+    light(coll, "sigred", 9, semaphore(pl, m, (1.7, -25.9, 0.0)))
+    pl.obj("WalkLamps-col", coll)
+    # ---- the yard office by the gate: a lit window, somebody's coat on a nail inside
+    of = MB()
+    lp = hut(of, m, -24.2, -21.0, -18.2, -14.2, 2.8, m["wood"], window_face=(1, 0))
+    of.obj("YardOffice-col", coll)
+    light(coll, "window", 300, lp)
+    # a tool house at the north end, dark
+    th = MB()
+    hut(th, m, -25.8, -22.4, 56.0, 59.5, 2.6, m["fence"], window_face=(1, 0), lit=False)
+    th.obj("ToolHouse-col", coll)
+    # ---- more freight in the north of the yard, where it was bare cinders
+    fr = MB()
+    lumber_pile(fr, m, (-20.5, 38.0, 0.0), layers=6, length=6.0)
+    lumber_pile(fr, m, (-16.2, 45.8, 0.0), layers=4, length=5.0, rz=0.35)
+    tie_pile(fr, m, (-23.5, 45.0, 0.0), layers=7)
+    tie_pile(fr, m, (-13.8, 40.6, 0.0), layers=5, rz=0.2)
+    for k in range(4):
+        wheelset(fr, m, (-19.5, 29.2 + k * 1.3, 0.0))
+    dray(fr, m, (-8.2, 41.5, 0.0), 0.2)
+    for x, y in ((-17.5, -7.2), (-18.3, -7.0), (-17.9, -7.8)):
+        barrel(fr, m, (x, y, 0.0), h=0.85)
+    fr.obj("NorthFreight-col", coll)
+    # ---- the passenger platform: baggage carts, mail sacks and milk cans by the station wall
+    pf = MB()
+    for y in (6.0, 24.0, 40.0):
+        baggage_cart(pf, m, (12.2, y, 0.62), 0.0)
+        sack(pf, m, (12.2, y + 0.6, 1.25))
+    for k, (x, y) in enumerate(((12.5, 13.4), (12.9, 13.7), (12.6, 14.1), (12.9, 14.4))):
+        milk_can(pf, m, (x, y, 0.62))
+    for x, y in ((12.4, 31.0), (12.9, 31.5), (12.2, 32.0)):
+        sack(pf, m, (x, y, 0.62))
+    pf.obj("PlatformFreight-col", coll)
+    # ---- signboards
+    sg = MB()
+    sg.box((-16.02, -0.2, 4.1), (-15.94, 8.6, 4.95), m["wood"])
+    sg.box((-3.2 - 1.3, -26.36, 3.35), (-3.2 + 1.3, -26.3, 3.95), m["wood"])
+    sg.box((-21.0 + 0.02, -18.1, 2.35), (-20.94, -15.9, 2.7), m["wood"])
+    sg.obj("Signboards", coll)
+    kit.text_mesh("Sign_FreightHouse", "FREIGHT HOUSE", 0.52, (-15.9, 4.2, 4.52), (math.pi / 2, 0, math.pi / 2), m["sign"], coll, extrude=0.01, font=CINZEL)
+    kit.text_mesh("Sign_Tower", "D. L. & W. R. R.", 0.3, (-3.2, -26.4, 3.65), (math.pi / 2, 0, 0), m["sign"], coll, extrude=0.008, font=CINZEL)
+    kit.text_mesh("Sign_Office", "YARD OFFICE", 0.2, (-20.9, -17.0, 2.52), (math.pi / 2, 0, math.pi / 2), m["sign"], coll, extrude=0.006, font=CINZEL)
 
 
 # ------------------------------------------------------------------ the yard
@@ -356,7 +595,7 @@ def yard():
     bc = MB()
     baggage_cart(bc, m, (-9.0, -7.8, 0.0), 0.3)
     baggage_cart(bc, m, (-10.6, 1.8, 0.0), -0.15)
-    baggage_cart(bc, m, (-6.8, 8.4, 0.0), 0.05)
+    baggage_cart(bc, m, (-8.6, 6.4, 0.0), 0.05)
     bc.obj("Carts-col", coll)
     # a switchman's shanty and a stack of spare rails
     sh = MB()
@@ -485,7 +724,7 @@ def yard():
     ld.obj("Ladders", coll)
     # more freight to hide behind: crates, cases and barrels scattered on the yard's west side
     mc = MB()
-    extra = [(-10.2, -20.5, 1), (-8.8, -21.4, 2), (-12.6, -23.8, 1), (-6.9, -23.2, 1), (-0.2, -22.4, 1), (0.9, -18.4, 2),
+    extra = [(-8.9, -24.9, 1), (-18.2, -17.6, 2), (-12.6, -23.8, 1), (-6.9, -23.2, 1), (-0.9, -23.4, 1), (1.45, -17.6, 2),
              (-8.6, -3.4, 1), (-12.9, 0.3, 2), (-7.9, 4.2, 1), (-13.9, 15.4, 1), (-8.4, 22.4, 2), (-10.6, 28.0, 1),
              (-6.4, 31.6, 2), (-13.0, 34.6, 1), (-7.4, -8.4, 1), (-12.6, -17.8, 1)]
     for x, y, n in extra:
@@ -612,6 +851,7 @@ def yard():
     # the conductor paces the ground south of the Senator's car
     for i, pt in enumerate(((1.6, -14.8), (-0.6, -17.2), (1.8, -19.6), (3.2, -17.0))):
         mark(coll, "MARK_conductor_%d" % i, (pt[0], pt[1], 0.3))
+    yard_more(coll, m)
     kit.export(sc, "hoboken_yard")
     return sc
 
