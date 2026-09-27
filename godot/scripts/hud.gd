@@ -753,13 +753,21 @@ func toast(text: String, seconds := 4.5) -> void:
 		root.add_child(_toast)
 	_toast.text = text
 	_center(_toast)
-	_toast.position.y = 70
+	# a third of the way down: clear of the clock, the ticket banner and the signal lamp up top
+	_toast.position.y = maxf(240.0, root.size.y * 0.3)
 	_toast.modulate.a = 1.0
 	if _toast_tw:
 		_toast_tw.kill()
 	_toast_tw = create_tween()
 	_toast_tw.tween_interval(seconds)
 	_toast_tw.tween_property(_toast, "modulate:a", 0.0, 1.0)
+
+
+func clear_toast() -> void:
+	if _toast_tw:
+		_toast_tw.kill()
+	if _toast:
+		_toast.modulate.a = 0.0
 
 
 func _on_meta(meta: Variant) -> void:

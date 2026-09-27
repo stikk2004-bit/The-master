@@ -114,6 +114,15 @@ var _boarded := {}
 var _run := 0
 var _next_cab := 0
 var _gate_hint := false
+var _routes: Array = []            # how each of the seven comes tonight: street, station or yard
+var _spot_seen := {}               # when each roaming spot was last looked at, shared by the watchmen
+const PERCHES := [
+	["res://models/npc_watchman.glb", "The switchman", "perch_tower", [-1.571, 3.142, 2.36, 1.571, -2.36]],
+	["res://models/npc_brakeman.glb", "The man on the shed roof", "perch_shed", [1.571, 2.36, 0.785]],
+]
+## travelers off the late train who look a good deal like the seven, and aren't
+const LOOKALIKES := ["res://models/npc_andrew.glb", "res://models/npc_strong.glb", "res://models/npc_vanderlip.glb", "res://models/npc_davison.glb"]
+const TRAVELER_PATHS := [[0, 1, 2], [5, 1, 3, 4], [0, 3, 4], [5, 1, 2]]
 var _piles: Array = []             # [Node3D, mark name] stones lying about the yard
 var _caught_busy := false
 var _clock := 0.0
@@ -309,10 +318,10 @@ func _swing(door: Node3D, angle: float, seconds := 0.7) -> void:
 	await tw.finished
 
 
-func _move_player(points: Array, spd: float) -> void:
-	## walk the player along a path by script (up steps, through a door); physics is off meanwhile
+func _move_player(points: Array, spd: float, anim_name := "Walk") -> void:
+	## walk the player along a path by script (up steps, through a door, up a ladder); physics is off meanwhile
 	player.set_physics_process(false)
-	player._play("Walk")
+	player._play(anim_name)
 	for p in points:
 		var target: Vector3 = p
 		while not skipping:
@@ -325,10 +334,10 @@ func _move_player(points: Array, spd: float) -> void:
 				break
 			player.global_position += to / dist * step
 			var flat := Vector2(to.x, to.z)
-			if flat.length() > 0.05:
+			if flat.length() > 0.05 and anim_name != "Climb":
 				player.model.rotation.y = lerp_angle(player.model.rotation.y, atan2(to.x, to.z), 0.25)
 			if player.anim:
-				player.anim.speed_scale = clampf(spd / 1.7, 0.6, 1.4)
+				player.anim.speed_scale = clampf(spd / 1.7, 0.6, 1.4) if anim_name == "Walk" else 1.0
 			await get_tree().process_frame
 		if skipping:
 			player.global_position = points[points.size() - 1]
@@ -617,8 +626,28 @@ func _build_hoboken() -> void:
 		g.alarmed.connect(_on_alarm.bind(g))
 		g.active = true
 		g.watching = false
+	_spot_seen.clear()
 	for g in guards:
-		g.roam(spots, guards, map)
+		g.roam(spots, guards, map, _spot_seen)
+	# two more up high: in the switchman's tower and on the freight shed's roof
+	for spec in PERCHES:
+		var pm := String(spec[2])
+		if not marks.has(pm):
+			continue
+		var pg := _guard(String(spec[0]), String(spec[1]), [mk(pm)])
+		pg.lines_suspicious = ["Something moving down there.", "Who's that by the freight?"]
+		pg.lines_clear = ["Hm.", "Shadows."]
+		pg.alarmed.connect(_on_alarm.bind(pg))
+		pg.perch(spec[3])
+		pg.active = true
+		pg.watching = false
+	# the lookalikes, waiting in the station until the mission starts
+	for d in LOOKALIKES.size():
+		var la := _actor(String(LOOKALIKES[d]))
+		actors["decoy_%d" % d] = la
+		la.display_name = "A traveler"
+		la.visible = false
+		la.place(mk("cab_out") + Vector3(0, -30, 0), 0.0)
 	# the motor cab that brings them
 	cab = main._instance("res://models/motorcar.glb")
 	cab.visible = false
@@ -674,6 +703,15 @@ func _bake_nav() -> void:
 	nm.cell_height = 0.1
 	nm.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
 	nm.filter_baking_aabb = AABB(Vector3(-30.0, -0.6, -80.0), Vector3(46.0, 4.0, 108.0))
+	# the tarp wagon has no collision (you crawl under it), so keep the watchmen from walking through it
+	if marks.has("hide_tarp"):
+		var ob := NavigationObstacle3D.new()
+		ob.affect_navigation_mesh = true
+		ob.avoidance_enabled = false
+		ob.height = 2.0
+		ob.vertices = PackedVector3Array([Vector3(-1.3, 0, -2.0), Vector3(1.3, 0, -2.0), Vector3(1.3, 0, 2.0), Vector3(-1.3, 0, 2.0)])
+		level.add_child(ob)
+		ob.global_position = mk("hide_tarp") + Vector3(0.1, 0.0, 0.0)
 	var src := NavigationMeshSourceGeometryData3D.new()
 	NavigationServer3D.parse_source_geometry_data(nm, src, level)
 	NavigationServer3D.bake_from_source_geometry_data(nm, src)
@@ -771,7 +809,15 @@ func _leave_car() -> void:
 	_restore_exposure()
 	_drop_interactable("getout")
 	var right: Vector3 = motorcar.global_transform.basis.x
+	var fwd: Vector3 = motorcar.forward()
 	var out: Vector3 = motorcar.global_position - right * 1.7 + Vector3(0, 0.1, 0)
+	for cand in [motorcar.global_position - right * 1.7, motorcar.global_position + right * 1.7, motorcar.global_position - fwd * 3.2]:
+		var c: Vector3 = cand + Vector3(0, 0.1, 0)
+		var across_fence: bool = c.x > -28.6 and c.x < 14.0 and c.z < 27.6
+		if not across_fence and not player._overlaps_at(c):
+			out = c
+			break
+	out = player.free_spot(out)
 	player.visible = true
 	player.enabled = true
 	player.set_physics_process(true)
@@ -827,10 +873,15 @@ func _climb(i: int, up: bool) -> void:
 	var high := Vector3(bottom.x, top.y + 0.05, bottom.z - 0.3)
 	var over := Vector3(bottom.x + 0.2, top.y + 0.05, bottom.z - 1.0)
 	if up:
+		await _move_player([foot], 1.4)
 		player.face(_yaw_to(foot, foot + Vector3(0, 0, -1)))
-		await _move_player([foot, high, over, top], 1.25)
+		await _move_player([high], 1.1, "Climb")
+		await _move_player([over, top], 1.3)
 	else:
-		await _move_player([over, high, foot, bottom], 1.4)
+		await _move_player([over], 1.3)
+		player.face(_yaw_to(foot, foot + Vector3(0, 0, -1)))
+		await _move_player([high, foot], 1.3, "Climb")
+		await _move_player([bottom], 1.4)
 	main.busy = false
 	player.enabled = true
 
@@ -848,6 +899,10 @@ func _start_mission() -> void:
 	_boarded.clear()
 	_next_cab = 0
 	_run += 1
+	_routes = ["street", "street", "station", "station", "yard", "yard", ["street", "station", "yard"][randi() % 3]]
+	_routes.shuffle()
+	for i in LOOKALIKES.size():
+		_traveler_loop(i, _run)
 	hud.mission.set_slots(7)
 	hud.set_objective("Photograph all seven men before they go into the Senator's car.   Q for the camera.")
 	hud.set_timer(_tally(MEN.keys()))
@@ -877,35 +932,57 @@ func _steps_path() -> Array:
 
 
 func _arrival_live(i: int, run: int) -> void:
+	## one of the seven comes: by cab from the street, out of the station, or on foot across the yard
 	var entry: Array = ARRIVALS[i]
 	var key := String(entry[0])
 	var talk: Array = entry[1]
 	var a = actors[key]
 	var porter = actors["porter"]
 	var spd := _speed(key)
-	cab.visible = true
-	var cin := mk("cab_in")
-	var cstop := mk("cab_stop")
-	cab.global_position = cin
-	cab.rotation.y = PI / 2.0
-	await _drive(cab, cin, cstop, 3.2)
-	if run != _run or not is_instance_valid(a):
-		return
-	a.visible = true
-	a.place(cstop + Vector3(0.4, 0.0, -0.9), 0.0)
-	a.walk(_boarding_path(), spd)
-	_drive(cab, cstop, mk("cab_out"), 5.0)
+	var how := String(_routes[i]) if i < _routes.size() else "street"
+	var to_talk := []
+	var after := _steps_path()
+	match how:
+		"station":
+			a.visible = true
+			a.place(mk("station_walk_0"), PI)
+			to_talk = [mk("station_walk_1"), mk("station_walk_2"), mk("rear_approach")]
+		"yard":
+			a.visible = true
+			a.place(mk("yard_walk_0"), PI)
+			for k in range(1, 6):
+				to_talk.append(mk("yard_walk_%d" % k))
+			after = []
+			for k in 5:
+				after.append(mk("west_step_%d" % k))
+			after.append(mk("rear_door"))
+		_:
+			cab.visible = true
+			var cin := mk("cab_in")
+			var cstop := mk("cab_stop")
+			cab.global_position = cin
+			cab.rotation.y = PI / 2.0
+			await _drive(cab, cin, cstop, 3.2)
+			if run != _run or not is_instance_valid(a):
+				return
+			a.visible = true
+			a.place(cstop + Vector3(0.4, 0.0, -0.9), 0.0)
+			to_talk = _boarding_path()
+			_drive(cab, cstop, mk("cab_out"), 5.0)
+	a.walk(to_talk, spd)
 	await until_arrived(a)
 	if run != _run or not is_instance_valid(a):
 		return
-	porter.face_point(a.global_position)
-	a.face_point(porter.global_position)
+	if how != "yard":
+		porter.face_point(a.global_position)
+		a.face_point(porter.global_position)
+	a.play("TipHat", 0.2)
 	for t in talk:
 		var dur: float = hud.say(String(t[0]), String(t[1]))
 		await get_tree().create_timer(dur).timeout
 		if run != _run or not is_instance_valid(a):
 			return
-	a.walk(_steps_path(), spd)
+	a.walk(after, spd)
 	await until_arrived(a)
 	if run != _run or not is_instance_valid(a):
 		return
@@ -920,6 +997,28 @@ func _arrival_live(i: int, run: int) -> void:
 	porter.face_yaw(-PI / 2.0)
 	if not photos.has(key) and (stage == "yard" or stage == "board"):
 		_yard_reset("", "", "He's aboard", "%s went in before you got his picture. Jekyll wanted all seven. Try again." % String(MEN[key]["name"]))
+
+
+func _traveler_loop(i: int, run: int) -> void:
+	## a lookalike off the late train: out onto the platform, along it, and into an ordinary coach; again and again
+	var la = actors.get("decoy_%d" % i)
+	if la == null:
+		return
+	await get_tree().create_timer(randf_range(4.0, 20.0) + 9.0 * i).timeout
+	while run == _run and is_instance_valid(la) and stage in ["yard", "board"]:
+		var route: Array = TRAVELER_PATHS[(i + randi() % 2) % TRAVELER_PATHS.size()]
+		var pts := []
+		for n in route:
+			pts.append(mk("traveler_%d" % int(n)))
+		la.visible = true
+		la.place(pts[0], PI)
+		la.walk(pts.slice(1), randf_range(1.1, 1.5))
+		await until_arrived(la)
+		if run != _run or not is_instance_valid(la):
+			return
+		la.visible = false
+		la.place(mk("cab_out") + Vector3(0, -30, 0), 0.0)
+		await get_tree().create_timer(randf_range(10.0, 26.0)).timeout
 
 
 func _drive(node: Node3D, from: Vector3, to: Vector3, seconds: float) -> void:
@@ -1014,10 +1113,17 @@ func _yard_reset(who: String, shout: String, title: String, sub: String) -> void
 	player.sneaking = true
 	for k in guards.size():
 		var g = guards[k]
-		var spec: Array = WATCHMEN[k % WATCHMEN.size()]
-		g.reset_to(spots[int(spec[2]) % spots.size()] if not spots.is_empty() else g.global_position)
+		if g.perched:
+			g.reset_to(g.home)
+		else:
+			var spec: Array = WATCHMEN[k % WATCHMEN.size()]
+			g.reset_to(spots[int(spec[2]) % spots.size()] if not spots.is_empty() else g.global_position)
 		g.active = true
 		g.watching = true
+	for i in LOOKALIKES.size():
+		var la = actors["decoy_%d" % i]
+		la.visible = false
+		la.place(mk("cab_out") + Vector3(0, -30, 0), 0.0)
 	player.stones = STONES
 	_lay_stones()
 	player.enabled = true
@@ -1282,6 +1388,10 @@ func _subjects() -> Array:
 				if a == null or not is_instance_valid(a) or not (a as Node3D).visible:
 					continue
 				out.append([key, (a as Node3D).global_position, 1.8, 70.0])
+			for i in LOOKALIKES.size():
+				var la = actors.get("decoy_%d" % i)
+				if la != null and is_instance_valid(la) and (la as Node3D).visible:
+					out.append(["decoy_%d" % i, (la as Node3D).global_position, 1.8, 70.0])
 		"car_photos":
 			for k in CAR_PHOTOS:
 				if not photos.has(k):
@@ -1377,6 +1487,10 @@ func _blank_print() -> Texture2D:
 
 
 func _record_photo(key: String, tex: Texture2D) -> void:
+	if key.begins_with("decoy"):
+		hud.mission.show_print(tex, "A stranger", "Just a traveler off the late train. Not one of the seven, and that's film you won't get back.", "")
+		_after_miss()
+		return
 	photos.append(key)
 	var title := ""
 	var sub := ""
@@ -2188,13 +2302,19 @@ func autotest() -> void:
 	await _until(_man_visible.bind("nelson"), 10.0)
 	await get_tree().create_timer(3.0).timeout
 	var n = actors["nelson"]
-	player.global_position = n.global_position + Vector3(-9.0, 0.0, 0.0)
-	player.yaw = _yaw_to(player.global_position, n.global_position)
-	player.set_camera_up(true)
-	player.fp_pitch = -0.05
-	await get_tree().process_frame
-	await get_tree().process_frame
-	var framed := _framed_subject()
+	print("  nelson came by the ", _routes[0], " way")
+	# his way in is random, so stand off him from whichever side has a clear view
+	var framed := []
+	for off in [Vector3(-9, 0, 0), Vector3(9, 0, 0), Vector3(0, 0, 9), Vector3(0, 0, -9), Vector3(-6, 0, 6), Vector3(6, 0, -6)]:
+		player.global_position = n.global_position + off
+		player.yaw = _yaw_to(player.global_position, n.global_position)
+		player.set_camera_up(true)
+		player.fp_pitch = -0.05
+		await get_tree().process_frame
+		await get_tree().process_frame
+		framed = _framed_subject()
+		if not framed.is_empty():
+			break
 	print("  framed in the viewfinder: ", framed[0] if not framed.is_empty() else "nobody")
 	if framed.is_empty():
 		var cam: Camera3D = player.fp_cam
@@ -2363,6 +2483,9 @@ func stealthtest() -> void:
 	print("STEALTH watchmen reached %d of %d places in a minute" % [visited.size(), spots.size()])
 	print("STEALTH nearest other watchman: %.1f m on average, %.1f m at the closest" % [near_sum / maxf(samples, 1.0), near_min])
 	print("STEALTH hidden under the tarp for a minute: peak notice %.2f, caught %d" % [peak, caught_count[0]])
+	var tarp := mk("hide_tarp")
+	var walk_near := NavigationServer3D.map_get_closest_point(level.get_world_3d().navigation_map, tarp)
+	print("STEALTH nearest a watchman can walk to the tarp hide: %.1f m" % Vector2(walk_near.x - tarp.x, walk_near.z - tarp.z).length())
 	_unhide("tarp")
 	# careless: stand up in a watchman's lantern beam
 	var g0 = guards[0]

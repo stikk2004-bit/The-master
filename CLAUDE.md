@@ -44,7 +44,8 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
     Island, the meeting room), the pocket Kodak, the caught resets, the evidence panel at the end.
   - `scripts/mission_ui.gd`: the mission layer of the HUD: big countdown (set_clock), objective box
     (hud.set_objective / hud.set_timer land here), camera item slot, viewfinder, the photo print that
-    pops up with who's in it, and the strip of prints still needed.
+    pops up with who's in it (small, slides in at the left, then flies to its slot), and the strip of
+    prints still needed.
   - `scripts/drive.gd`: Jekyll's motorcar (W/S throttle and brake, A/D steer, E out when stopped).
   - `scripts/look.gd`: textured materials by Blender material name (MATS, EMIT, IMG tables),
     lighting presets, color grading, graphics quality.
@@ -57,6 +58,12 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
     other watchmen and their targets, and walk there on the navmesh the chapter bakes at load. They swing
     the beam when they stop, walk over to look when they half see you (`alarmed` calls the nearest other one
     over). `watching = false` keeps a guard walking without noticing anyone; a fixed round still works.
+    The roamers share one `seen` dictionary (spot index to the last time anyone was within 6 m of it) and
+    favor the spots nobody has looked at in a while, so between them they clear every corner every couple
+    of minutes. `perch(yaws)` makes a lookout who stays put up high and turns his lantern to a new facing
+    every 6 to 10 s (the switchman in the switch tower, a man on the freight shed roof).
+    The tarp wagon has no collision (you crawl under it); a NavigationObstacle3D in chapter _bake_nav keeps
+    the watchmen from walking through it and over a hidden player.
   - `scripts/player.gd`: third-person controller (WASD, mouse orbit, Shift run, C sneak, Space jump,
     R unstuck, step-up), outfits (club, waiter), carrying a tray, noise level for guards. The camera is an
     item once `has_camera`: Q raises it (first-person viewfinder, wheel zoom, click emits `shutter`).
@@ -64,7 +71,9 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
     the player out of sight (guards ignore a hidden player unless right on top of him). F throws a stone
     (`stones`, `throw_stone` signal); the chapter makes it clatter where it lands and guards within 17 m go
     and look (guard.heard_noise). Jekyll gives 3; two more lie hidden in the yard (MARK_stones_0 on a
-    climbable crate stack, MARK_stones_1 on the empty boxcar's roof).
+    climbable crate stack, MARK_stones_1 on the empty boxcar's roof). free_spot(pos) finds the nearest
+    place the capsule fits; if the player pushes into something for a second without moving, he's nudged
+    there (no more pressing R after getting out of the motorcar or out of a hiding place).
   - `scripts/hud.gd`: title, prompt bar, reading panel with [url] links, guest book, toast, chime,
     location banners, subtitles (say), letterbox, chapter cards, objective line, a second line under it
     for countdowns and photo tallies (set_timer), the signal lamp (signal_lamp.gd: green, amber, red as the
@@ -150,10 +159,13 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
   shows a subtitle and waits; E moves a line along (in cutscenes and while pouring coffee), Esc skips the scene.
 - The chapter, as played: a letter, then Jekyll (a made-up character; the evidence panel says so) by his
   motorcar at the west end of River Street. He hands over the Kodak (12 exposures). Drive to the freight gate,
-  walk in, and the clock starts (7:00). The seven arrive by cab while you play, each at his own pace, talk
-  with the porter, climb the observation platform steps and go in at the rear door; each must be photographed
-  first (the print pops up with his full name and position) or the yard starts over. Five watchmen roam with
-  beams. Hide under the tarp wagon (it looks onto the platform), in the empty boxcar, or in the shed doorway;
+  walk in, and the clock starts (7:00). The seven arrive while you play, each at his own pace and by one of
+  three ways, shuffled every try: by cab up River Street, on foot down the station platform, or across the
+  yard from the far side and up the west steps (_arrival_live, MARK_station_walk_*, yard_walk_*, west_step_*).
+  They tip their hats to the porter, climb the observation platform steps and go in at the rear door; each
+  must be photographed first (the print pops up with his full name and position) or the yard starts over.
+  Four travelers who look like some of the men (same models) wander the traveler_* marks; photographing
+  one wastes film ("A stranger"). Five watchmen roam with beams and two lookouts watch from up high. Hide under the tarp wagon (it looks onto the platform), in the empty boxcar, or in the shed doorway;
   climb crates or the boxcar ladders. All seven taken, board at the car's dark front steps (a faint diamond
   marks them) before the train leaves. In the car: listen at the pantry,
   put on the steward's jacket, pour for Frank and Nelson, then photograph the four papers by Arthur's valise
@@ -181,7 +193,11 @@ Trading Floor), the 1910 chapter, all characters, the Skyrim / Dark Souls look a
 Ways into 1910: take the railroad ticket from the hooded figure after he's talked a while, or pick up the
 ticket on the lobby desk.
 Stealth: five watchmen roam the yard at random with lantern beams, spread out (about 14 m apart on average in
-the stealthtest). The owner wants it very hard to get the pictures without being seen.
+the stealthtest) and sweeping every corner between them, plus two lookouts up high turning their lanterns.
+The owner wants it very hard to get the pictures without being seen.
+The hooded figure gives one line per E press (no faster than one a second) and offers the ticket with the
+third; toasts sit a third of the way down the screen so they never cover the clock or banners.
+Animations beyond walking: the player has Throw, Climb (ladders) and Mantle; the seven have TipHat.
 Coat skirts follow the thighs in front (charlib.skirt_w) and leg tops are slimmed under coats, arms hang a
 little out from the body: that keeps legs and cuffs from showing through coats when walking and sitting.
 

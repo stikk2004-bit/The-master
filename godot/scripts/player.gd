@@ -119,7 +119,7 @@ func _load_model(which: String) -> void:
 	var players := model.find_children("*", "AnimationPlayer", true, false)
 	if players.size() > 0:
 		anim = players[0]
-		for n in ["Idle", "Walk", "Run", "SneakIdle", "SneakWalk", "CarryIdle", "CarryWalk"]:
+		for n in ["Idle", "Walk", "Run", "SneakIdle", "SneakWalk", "CarryIdle", "CarryWalk", "Climb"]:
 			if anim.has_animation(n):
 				anim.get_animation(n).loop_mode = Animation.LOOP_LINEAR
 		if not anim.animation_finished.is_connected(_on_anim_finished):
@@ -301,7 +301,7 @@ func hide_at(pos: Vector3, facing_yaw: float, eye_h := 1.0) -> void:
 func unhide(pos: Vector3, facing_yaw: float) -> void:
 	hidden = false
 	set_physics_process(true)
-	place(pos, facing_yaw)
+	place(free_spot(pos), facing_yaw)
 	model.visible = not camera_up
 
 
@@ -344,7 +344,7 @@ func _try_mantle() -> bool:
 	velocity = Vector3.ZERO
 	noise = 0.45
 	model.rotation.y = atan2(f.x, f.z)
-	_play("Run")
+	play_once("Mantle")
 	var tw := create_tween()
 	tw.tween_property(self, "global_position", Vector3(base.x, top.y + 0.06, base.z), 0.18 + h * 0.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	tw.tween_property(self, "global_position", top + f * 0.2 + Vector3(0, 0.06, 0), 0.22)
@@ -355,7 +355,54 @@ func _try_mantle() -> bool:
 func _end_mantle() -> void:
 	_mantle = false
 	velocity = Vector3.ZERO
+	one_shot = ""
 	current_anim = ""
+
+
+func _overlaps_at(pos: Vector3) -> bool:
+	## would the player's capsule be stuck inside something standing here?
+	var q := PhysicsShapeQueryParameters3D.new()
+	var cap := CapsuleShape3D.new()
+	cap.radius = 0.3
+	cap.height = 1.7
+	q.shape = cap
+	q.transform = Transform3D(Basis.IDENTITY, pos + Vector3(0.0, 0.9, 0.0))
+	q.exclude = [get_rid()]
+	return not get_world_3d().direct_space_state.intersect_shape(q, 1).is_empty()
+
+
+func free_spot(pos: Vector3) -> Vector3:
+	## the nearest place around pos where the player can stand without being wedged in anything
+	if not _overlaps_at(pos):
+		return pos
+	for r in [0.6, 1.2, 1.8, 2.6, 3.4]:
+		for i in 12:
+			var a := TAU * float(i) / 12.0
+			var p := pos + Vector3(cos(a) * r, 0.05, sin(a) * r)
+			if not _overlaps_at(p):
+				return p
+	return pos + Vector3(0.0, 0.6, 0.0)
+
+
+var _stuck_t := 0.0
+var _stuck_from := Vector3.ZERO
+
+
+func _check_stuck(delta: float, trying: bool) -> void:
+	## pushing to move but going nowhere and wedged in something: step out of it
+	if not trying or hidden or _mantle:
+		_stuck_t = 0.0
+		_stuck_from = global_position
+		return
+	if global_position.distance_to(_stuck_from) > 0.15:
+		_stuck_t = 0.0
+		_stuck_from = global_position
+		return
+	_stuck_t += delta
+	if _stuck_t > 1.0 and _overlaps_at(global_position):
+		global_position = free_spot(global_position)
+		velocity = Vector3.ZERO
+		_stuck_t = 0.0
 
 
 func _process(_delta: float) -> void:
@@ -404,6 +451,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		stones -= 1
 		if not hidden:
 			model.rotation.y = atan2(f.x, f.z)
+			play_once("Throw")
 		throw_stone.emit(eye_position() + Vector3(f.x, 0.0, f.z).normalized() * 0.45, dir * 13.0)
 		get_viewport().set_input_as_handled()
 		return
@@ -471,6 +519,7 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	if enabled and dir.length() > 0.1 and is_on_floor() and is_on_wall():
 		_try_step(dir * speed * delta)
+	_check_stuck(delta, enabled and dir.length() > 0.1)
 	if is_on_floor():
 		_safe_timer += delta
 		if _safe_timer > 0.5:

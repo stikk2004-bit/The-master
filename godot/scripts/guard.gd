@@ -8,6 +8,10 @@ extends "res://scripts/actor.gd"
 ## map. When he stops he swings the lantern side to side. When he half sees something he walks over
 ## to look, and tells the others (alarmed), and the nearest one comes too.
 ## watching = false keeps him walking his round without taking any notice of anyone.
+## perch(): a watchman who stays put up high (a tower, a roof) and every so often turns to watch
+## another part of the yard, his beam pitched down onto the ground. The roaming ones share a record
+## of when each place was last looked at (seen) and favor the corners nobody has checked lately,
+## so between them the whole yard gets cleared every so often.
 
 signal caught
 signal spoke(line: String)
@@ -42,6 +46,14 @@ var others: Array = []                 # roaming: the other watchmen, to keep ap
 var nav_map: RID
 var target := Vector3.INF
 var sweep := 0.0
+var beam_pitch := -0.2
+var perched := false
+var perch_yaws: Array = []
+var seen := {}                         # spot index -> time it was last looked at (shared by all of them)
+var home := Vector3.ZERO               # a perched watchman's spot
+var _perch_t := 0.0
+var _target_i := -1
+var _seen_t := 0.0
 var _recent: Array = []
 var _sweep_t := 0.0
 var _said := false
@@ -83,12 +95,26 @@ func arm(route_points: Array, player_node: Node3D, lamp_list: Array, with_lanter
 		_aim_beam()
 
 
-func roam(spot_list: Array, other_guards: Array, map: RID) -> void:
+func roam(spot_list: Array, other_guards: Array, map: RID, shared_seen := {}) -> void:
 	## patrol by picking places across the yard instead of a fixed round
 	spots = spot_list
 	others = other_guards
 	nav_map = map
+	seen = shared_seen
 	target = Vector3.INF
+
+
+func perch(yaws: Array) -> void:
+	## stay up here and turn now and then to watch a different part of the yard
+	perched = true
+	home = global_position
+	perch_yaws = yaws
+	beam_pitch = -0.42
+	route = []
+	spots = []
+	_perch_t = randf_range(2.0, 5.0)
+	if not yaws.is_empty():
+		model.rotation.y = float(yaws[0])
 
 
 func look_yaw() -> float:
@@ -103,7 +129,7 @@ func _aim_beam() -> void:
 	var fwd := Vector3(sin(y), 0.0, cos(y))
 	var right := Vector3(fwd.z, 0.0, -fwd.x)
 	beam.global_position = global_position + Vector3(0, 1.05, 0) + fwd * 0.35 - right * 0.22
-	var aim := Vector3(sin(y), -0.2, cos(y)).normalized()
+	var aim := Vector3(sin(y), beam_pitch, cos(y)).normalized()
 	beam.look_at(beam.global_position + aim, Vector3.UP)
 
 
@@ -215,10 +241,13 @@ func _physics_process(delta: float) -> void:
 		detection -= 0.15 * delta
 	detection = clampf(detection, 0.0, 1.0)
 
+	_note_seen(delta)
 	match state:
 		"patrol":
 			if detection > 0.3:
 				_become_suspicious(last_seen, true)
+			elif perched:
+				_perch_watch(delta)
 			elif not spots.is_empty():
 				_roam(delta)
 			else:
@@ -251,6 +280,9 @@ func _become_suspicious(where: Vector3, loud: bool, all_the_way := false) -> voi
 		spoke.emit(lines_suspicious[randi() % lines_suspicious.size()])
 	if loud:
 		alarmed.emit(where)
+	if perched:
+		face_yaw(atan2(where.x - global_position.x, where.z - global_position.z))
+		return
 	# walk over for a closer look, most of the way
 	var here := global_position
 	var go := here.lerp(where, 1.0 if all_the_way else 0.75) if here.distance_to(where) > 3.0 else here
@@ -308,10 +340,38 @@ func _roam(delta: float) -> void:
 	wait_left = randf_range(1.5, 5.0) if randf() < 0.7 else 0.0
 
 
+func _perch_watch(delta: float) -> void:
+	## up on his perch: hold a direction a while, then turn to another
+	_perch_t -= delta
+	if _perch_t <= 0.0 and not perch_yaws.is_empty():
+		_perch_t = randf_range(6.0, 10.0)
+		var y := float(perch_yaws[randi() % perch_yaws.size()]) + randf_range(-0.25, 0.25)
+		face_yaw(y)
+		_sweep_t = 0.0
+	wait_left = 1.0                    # keeps the lantern swinging a little while he watches
+	play(idle_anim)
+
+
+func _note_seen(delta: float) -> void:
+	## every half second, mark the places near him as looked at just now
+	if spots.is_empty():
+		return
+	_seen_t -= delta
+	if _seen_t > 0.0:
+		return
+	_seen_t = 0.5
+	var now := Time.get_ticks_msec() / 1000.0
+	for i in spots.size():
+		if global_position.distance_to(spots[i]) < 6.0:
+			seen[i] = now
+
+
 func _pick_spot() -> Vector3:
-	## somewhere not too near, not too far, and well away from the other watchmen and where they're going
+	## somewhere not too near, not too far, well away from the other watchmen and where they're going,
+	## and above all somewhere nobody has looked for a while
 	var best := Vector3.INF
 	var best_score := -1e9
+	var now := Time.get_ticks_msec() / 1000.0
 	for i in spots.size():
 		if _recent.has(i):
 			continue
@@ -325,7 +385,8 @@ func _pick_spot() -> Vector3:
 			var gt: Vector3 = g.target
 			if gt != Vector3.INF:
 				crowd = minf(crowd, s.distance_to(gt))
-		var score := minf(crowd, 22.0) + randf() * 9.0
+		var stale := now - float(seen.get(i, now - 90.0))
+		var score := minf(crowd, 22.0) + randf() * 9.0 + minf(stale, 120.0) * 0.3
 		if d_self < 6.0:
 			score -= 25.0
 		elif d_self > 38.0:

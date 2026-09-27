@@ -368,25 +368,25 @@ func show_print(tex: Texture2D, title: String, sub: String, stamp: String, slot 
 	v.add_theme_constant_override("separation", 6)
 	var pic := TextureRect.new()
 	pic.texture = tex
-	pic.custom_minimum_size = Vector2(420, 280)
+	pic.custom_minimum_size = Vector2(270, 180)
 	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	pic.material = sepia
-	var t: Label = hud._label(title.to_upper(), 26, INK, hud.caps_bold)
+	var t: Label = hud._label(title.to_upper(), 19, INK, hud.caps_bold)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var d: Label = hud._label(sub, 19, Color(INK, 0.85), hud.serif_italic)
+	var d: Label = hud._label(sub, 15, Color(INK, 0.85), hud.serif_italic)
 	d.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	d.custom_minimum_size = Vector2(420, 0)
+	d.custom_minimum_size = Vector2(270, 0)
 	v.add_child(pic)
 	v.add_child(t)
 	v.add_child(d)
 	card.add_child(v)
 	add_child(card)
 	if stamp != "":
-		var st: Label = hud._label(stamp, 30, Color("a3281c"), hud.caps_bold)
+		var st: Label = hud._label(stamp, 22, Color("a3281c"), hud.caps_bold)
 		st.rotation = -0.22
-		st.position = Vector2(300, 18)
+		st.position = Vector2(180, 10)
 		st.modulate.a = 0.0
 		pic.add_child(st)
 		var tws := create_tween()
@@ -397,13 +397,14 @@ func show_print(tex: Texture2D, title: String, sub: String, stamp: String, slot 
 	await get_tree().process_frame
 	card.reset_size()
 	card.pivot_offset = card.size / 2.0
-	var rest := Vector2(size.x * 0.64 - card.size.x / 2.0, size.y * 0.42 - card.size.y / 2.0)
-	card.position = Vector2(size.x + 40.0, rest.y + 60.0)
-	card.rotation = 0.25
+	# off to the left, out of the way of what you're looking at
+	var rest := Vector2(34.0, size.y * 0.5 - card.size.y / 2.0)
+	card.position = Vector2(-card.size.x - 40.0, rest.y + 40.0)
+	card.rotation = -0.25
 	var tw := create_tween()
-	tw.tween_property(card, "position", rest, 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.parallel().tween_property(card, "rotation", -0.05, 0.45)
-	tw.tween_interval(3.0)
+	tw.tween_property(card, "position", rest, 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(card, "rotation", -0.04, 0.4)
+	tw.tween_interval(2.2)
 	if slot >= 0 and slot < slots.size():
 		var target := slots[slot][0] as Control
 		var goal := target.global_position + target.size / 2.0 - card.size / 2.0

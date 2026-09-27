@@ -504,6 +504,48 @@ def yard():
         for k in range(R.randint(3, 5)):
             barrel(mc, m, (cx + R.uniform(-0.8, 0.8), cy + R.uniform(-0.8, 0.8), 0.0))
     mc.obj("MoreFreight-col", coll)
+
+    # ---------------- a switchman's tower at the south end of the yard: a watchman stands up there
+    tw = MB()
+    TX, TY, TH = -3.2, -25.2, 4.4
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            tw.box((TX + sx * 1.0 - 0.1, TY + sy * 1.0 - 0.1, 0.0), (TX + sx * 1.0 + 0.1, TY + sy * 1.0 + 0.1, TH), m["wood"])
+    for zz in (1.4, 2.9):
+        tw.box((TX - 1.1, TY - 1.05, zz), (TX + 1.1, TY - 0.95, zz + 0.12), m["wood"])
+        tw.box((TX - 1.1, TY + 0.95, zz), (TX + 1.1, TY + 1.05, zz + 0.12), m["wood"])
+    tw.box((TX - 1.4, TY - 1.4, TH), (TX + 1.4, TY + 1.4, TH + 0.12), m["wood"])            # the floor up top
+    for (a, b) in (((TX - 1.4, TY - 1.4), (TX + 1.4, TY - 1.32)), ((TX - 1.4, TY + 1.32), (TX + 1.4, TY + 1.4)),
+                   ((TX - 1.4, TY - 1.4), (TX - 1.32, TY + 1.4)), ((TX + 1.32, TY - 1.4), (TX + 1.4, TY + 1.4))):
+        tw.box((a[0], a[1], TH + 0.12), (b[0], b[1], TH + 1.05), m["wood"])                # waist-high walls
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            tw.rod((TX + sx * 1.35, TY + sy * 1.35, TH + 1.05), (TX + sx * 1.35, TY + sy * 1.35, TH + 2.4), 0.05, m["wood"])
+    tw.lathe((TX, TY, TH + 2.4), [(2.1, 0.0), (0.15, 0.9)], m["tin"], seg=4)
+    for k in range(12):
+        tw.rod((TX + 1.2, TY - 1.6, 0.35 * k + 0.2), (TX + 0.8, TY - 1.6, 0.35 * k + 0.2), 0.02, m["iron"])
+    tw.obj("SwitchTower-col", coll)
+    light(coll, "lantern", 7, (TX + 1.2, TY + 1.2, TH + 1.6))
+    mark(coll, "MARK_perch_tower", (TX, TY, TH + 0.12), 0.0)
+    # and the freight shed's flat roof
+    mark(coll, "MARK_perch_shed", (-16.7, 4.0, 6.1), -math.pi / 2)
+
+    # ---------------- the other ways the seven might come
+    # out of the station's side door onto the platform, then south to the Senator's car
+    for i, (xx, yy) in enumerate(((13.3, -3.6), (10.2, -6.2), (8.3, -11.0))):
+        mark(coll, "MARK_station_walk_%d" % i, (xx, yy, 0.62))
+    # on foot through the freight gate and across the yard, up the west steps of the observation platform
+    for i, (xx, yy) in enumerate(((-25.5, -29.0), (-25.5, -25.0), (-16.0, -22.6), (-6.4, -20.0), (0.4, -16.0), (1.2, -12.45))):
+        mark(coll, "MARK_yard_walk_%d" % i, (xx, yy, 0.0))
+    for i, (xx, zz) in enumerate(((1.76, 0.44), (1.96, 0.78), (2.16, 1.12), (2.38, 1.46), (2.75, 1.8))):
+        mark(coll, "MARK_west_step_%d" % i, (xx, -12.45, zz))
+    # the lookalike travelers: from the station door or the street steps, to an ordinary coach
+    for i, (xx, yy) in enumerate(((13.3, -3.6), (9.9, 2.0), (7.4, 9.85), (9.9, 18.0), (7.4, 29.8), (9.5, -19.0))):
+        mark(coll, "MARK_traveler_%d" % i, (xx, yy, 0.62))
+    # a few more corners for the watchmen to clear
+    for i, (sx, sy) in enumerate(((-27.4, -26.4), (-27.4, 20.0), (-27.2, 50.0), (-20.0, 70.0), (0.5, 66.0), (-10.0, 46.0),
+                                  (-14.6, -1.0), (-18.5, -14.0), (-26.0, -10.0), (1.4, 40.0))):
+        mark(coll, "MARK_spot_%d" % (31 + i), (sx, sy, 0.0))
     # the freight shed's dark doorway on the loading dock
     dd = MB()
     dd.box((-16.06, 3.0, 1.1), (-15.98, 5.4, 3.6), m["glass_dark"])
