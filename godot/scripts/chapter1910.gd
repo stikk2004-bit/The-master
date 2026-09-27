@@ -98,8 +98,9 @@ var served := {}
 var guards: Array = []
 var cab: Node3D
 var train_node: Node3D
-var rear_door: Node3D
-var front_door: Node3D
+var door_w: Node3D     # the Senator's car: the seven's door on the lane side
+var door_e: Node3D     # and on the platform side, where the porter waits
+var front_door: Node3D # your way in, at the dark north end
 var lamp_list: Array = []
 var ambience: AudioStreamPlayer
 var window_scroll: Array = []
@@ -122,7 +123,7 @@ const PERCHES := [
 ]
 ## travelers off the late train who look a good deal like the seven, and aren't
 const LOOKALIKES := ["res://models/npc_andrew.glb", "res://models/npc_strong.glb", "res://models/npc_vanderlip.glb", "res://models/npc_davison.glb"]
-const TRAVELER_PATHS := [[0, 1, 2], [5, 1, 3, 4], [0, 3, 4], [5, 1, 2]]
+const TRAVELER_PATHS := [[0, 1, 6, 2], [5, 1, 3, 7, 4], [0, 1, 3, 7, 4], [5, 6, 2]]
 var _piles: Array = []             # [Node3D, mark name] stones lying about the yard
 var _caught_busy := false
 var _clock := 0.0
@@ -528,7 +529,8 @@ func build(level_name: String, lvl: Node3D) -> void:
 	if not player.throw_stone.is_connected(_on_throw):
 		player.throw_stone.connect(_on_throw)
 	_piles.clear()
-	rear_door = null
+	door_w = null
+	door_e = null
 	front_door = null
 	hud.set_timer("")
 	player.set_carrying(false)
@@ -593,7 +595,8 @@ func _build_hoboken() -> void:
 	_load("res://models/hoboken_yard.glb")
 	train_node = _load("res://models/hoboken_train.glb", _moving_train_mats())
 	_load("res://models/hoboken_boxcars.glb")
-	rear_door = train_node.find_child("RearDoor", true, false) as Node3D
+	door_w = train_node.find_child("EntryDoorW", true, false) as Node3D
+	door_e = train_node.find_child("EntryDoorE", true, false) as Node3D
 	front_door = train_node.find_child("FrontDoor", true, false) as Node3D
 	main._safety_floor()
 	_bake_nav()
@@ -609,6 +612,7 @@ func _build_hoboken() -> void:
 	for key in MEN.keys():
 		var a := _actor(String(key))
 		a.visible = false
+		a.follow_ground = true
 		a.place(mk("cab_out") + Vector3(0, -30, 0), 0.0)
 	# Jekyll, by his motorcar at the corner
 	var jk := _actor("res://models/npc_jekyll.glb", true)
@@ -651,6 +655,7 @@ func _build_hoboken() -> void:
 		var la := _actor(String(LOOKALIKES[d]))
 		actors["decoy_%d" % d] = la
 		la.display_name = "A traveler"
+		la.follow_ground = true
 		la.visible = false
 		la.place(mk("cab_out") + Vector3(0, -30, 0), 0.0)
 	# the motor cab that brings them
@@ -897,8 +902,11 @@ func _start_mission() -> void:
 	_yard_air()
 	_drop_interactable("car")
 	_drop_beacon("gate")
+	# nobody is standing at the gate waiting for you: they walk off, and nobody can have noticed you yet
 	for g in guards:
-		g.watching = true
+		g.watching = false
+		g.detection = 0.0
+		g.leave_area(mk("gate_in"), 16.0)
 	film = FILM
 	_update_item()
 	for k in MEN.keys():
@@ -906,8 +914,10 @@ func _start_mission() -> void:
 	_boarded.clear()
 	_next_cab = 0
 	_run += 1
-	_routes = ["street", "street", "station", "station", "yard", "yard", ["street", "station", "yard"][randi() % 3]]
-	_routes.shuffle()
+	_gate_grace(_run)
+	var rest := ["street", "gate", "gate", "north", "fence", ["street", "gate", "north", "fence"][randi() % 4]]
+	rest.shuffle()
+	_routes = ["street"] + rest     # the Senator comes to his own car by cab; the other six any way at all
 	for i in LOOKALIKES.size():
 		_traveler_loop(i, _run)
 	hud.mission.set_slots(7)
@@ -915,6 +925,24 @@ func _start_mission() -> void:
 	hud.set_timer(_tally(MEN.keys()))
 	_set_clock(MISSION_SECONDS, "The train leaves in", _missed_train)
 	await thought("The Senator's car is the maroon one at the back of the train, with the brass rail. The cabs pull up at the platform steps.")
+
+
+const GRACE_SECONDS := 6.0
+
+
+func _gate_grace(run: int) -> void:
+	## coming in at the gate you get a few seconds before anybody can have noticed you, and the watchmen
+	## keep off the gate for half a minute more, so nobody is standing there waiting when you step through
+	await get_tree().create_timer(GRACE_SECONDS).timeout
+	if run != _run or not stage in ["yard", "board"]:
+		return
+	for g in guards:
+		g.watching = true
+	await get_tree().create_timer(25.0).timeout
+	if run != _run:
+		return
+	for g in guards:
+		g.keep_away = Vector3.INF
 
 
 func _yard_schedule() -> void:
@@ -925,21 +953,30 @@ func _yard_schedule() -> void:
 		_next_cab += 1
 
 
-func _boarding_path() -> Array:
-	## from the platform steps to the rear of the car, then up its steps to the rear door
-	return [mk("step_bottom"), mk("step_top"), mk("rear_approach")]
+func _way(name: String) -> Array:
+	## one of the four ways the seven come (MARK_way_<name>_0, _1, ...), as the owner drew them
+	var pts := []
+	var k := 0
+	while marks.has("way_%s_%d" % [name, k]):
+		pts.append(mk("way_%s_%d" % [name, k]))
+		k += 1
+	return pts
 
 
-func _steps_path() -> Array:
-	var p := []
-	for k in 5:
-		p.append(mk("rear_step_%d" % k))
-	p.append(mk("rear_door"))
-	return p
+func _door_path(side: String) -> Array:
+	## up the Senator's car's steps and in at the south vestibule: side "w" is the lane, "e" the platform
+	var pts := []
+	var k := 0
+	while marks.has("door_%s_%d" % [side, k]):
+		pts.append(mk("door_%s_%d" % [side, k]))
+		k += 1
+	return pts
 
 
 func _arrival_live(i: int, run: int) -> void:
-	## one of the seven comes: by cab from the street, out of the station, or on foot across the yard
+	## one of the seven comes, one of four ways: through the side gate in the west fence or in at the freight
+	## gate, to the Senator's door on the lane side; up from the river landing or off a cab on River Street,
+	## to his door on the platform side, where the porter waits
 	var entry: Array = ARRIVALS[i]
 	var key := String(entry[0])
 	var talk: Array = entry[1]
@@ -947,60 +984,55 @@ func _arrival_live(i: int, run: int) -> void:
 	var porter = actors["porter"]
 	var spd := _speed(key)
 	var how := String(_routes[i]) if i < _routes.size() else "street"
-	var to_talk := []
-	var after := _steps_path()
-	match how:
-		"station":
-			a.visible = true
-			a.place(mk("station_walk_0"), PI)
-			to_talk = [mk("station_walk_1"), mk("station_walk_2"), mk("rear_approach")]
-		"yard":
-			a.visible = true
-			a.place(mk("yard_walk_0"), PI)
-			for k in range(1, 6):
-				to_talk.append(mk("yard_walk_%d" % k))
-			after = []
-			for k in 5:
-				after.append(mk("west_step_%d" % k))
-			after.append(mk("rear_door"))
-		_:
-			cab.visible = true
-			var cin := mk("cab_in")
-			var cstop := mk("cab_stop")
-			cab.global_position = cin
-			cab.rotation.y = PI / 2.0
-			await _drive(cab, cin, cstop, 3.2)
-			if run != _run or not is_instance_valid(a):
-				return
-			a.visible = true
-			a.place(cstop + Vector3(0.4, 0.0, -0.9), 0.0)
-			to_talk = _boarding_path()
-			_drive(cab, cstop, mk("cab_out"), 5.0)
-	a.walk(to_talk, spd)
+	var pts := _way(how)
+	if pts.size() < 2:
+		return
+	var side := "w" if how in ["fence", "gate"] else "e"
+	var door: Node3D = door_w if side == "w" else door_e
+	var steps := _door_path(side)
+	if how == "street":
+		cab.visible = true
+		var cin := mk("cab_in")
+		var cstop := mk("cab_stop")
+		cab.global_position = cin
+		cab.rotation.y = PI / 2.0
+		await _drive(cab, cin, cstop, 3.2)
+		if run != _run or not is_instance_valid(a):
+			return
+		_drive(cab, cstop, mk("cab_out"), 5.0)
+	var p0: Vector3 = pts[0]
+	var p1: Vector3 = pts[1]
+	a.visible = true
+	a.place(p0, atan2(p1.x - p0.x, p1.z - p0.z))
+	a.walk(pts.slice(1), spd)
 	await until_arrived(a)
 	if run != _run or not is_instance_valid(a):
 		return
-	if how != "yard":
+	if side == "e":
 		porter.face_point(a.global_position)
 		a.face_point(porter.global_position)
-	a.play("TipHat", 0.2)
+		a.play("TipHat", 0.2)
+	elif not steps.is_empty():
+		a.face_point(steps[0])
 	for t in talk:
 		var dur: float = hud.say(String(t[0]), String(t[1]))
 		await get_tree().create_timer(dur).timeout
 		if run != _run or not is_instance_valid(a):
 			return
-	a.walk(after, spd)
+	if steps.size() < 2:
+		return
+	a.walk(steps.slice(0, steps.size() - 1), spd)
 	await until_arrived(a)
 	if run != _run or not is_instance_valid(a):
 		return
-	await _swing(rear_door, -1.35, 0.6)
-	a.walk([mk("rear_inside")], spd * 0.8)
+	await _swing(door, -1.4 if side == "w" else 1.4, 0.6)
+	a.walk([steps[steps.size() - 1]], spd * 0.8)
 	await until_arrived(a)
 	if run != _run or not is_instance_valid(a):
 		return
 	a.visible = false
 	_boarded[key] = true
-	_swing(rear_door, 0.0, 0.8)
+	_swing(door, 0.0, 0.8)
 	porter.face_yaw(-PI / 2.0)
 	if not photos.has(key) and (stage == "yard" or stage == "board"):
 		_yard_reset("", "", "He's aboard", "%s went in before you got his picture. Jekyll wanted all seven. Try again." % String(MEN[key]["name"]))
@@ -1110,8 +1142,9 @@ func _yard_reset(who: String, shout: String, title: String, sub: String) -> void
 		a.visible = false
 		a.place(mk("cab_out") + Vector3(0, -30, 0), 0.0)
 	cab.visible = false
-	if rear_door:
-		rear_door.rotation.y = 0.0
+	for d in [door_w, door_e]:
+		if d:
+			(d as Node3D).rotation.y = 0.0
 	_drop_interactable("board")
 	_drop_beacon("board")
 	_drop_interactable("leave")
@@ -1178,7 +1211,7 @@ func _board() -> void:
 		t += get_process_delta_time()
 		var d := 0.08 * t * t
 		train_node.global_position = from + Vector3(0, 0, -d)
-		cine.look_at(train_node.global_position + Vector3(4, 2, 10))
+		cine.look_at(train_node.global_position + Vector3(4, 2, -20))	# the Senator's car as she pulls out
 		await get_tree().process_frame
 	player.visible = true
 	skipping = false
@@ -1417,7 +1450,7 @@ func _yard_air() -> void:
 	if env == null or _night_air.is_empty():
 		return
 	_base_exposure = float(_night_air[0]) * 1.3
-	env.ambient_light_energy = float(_night_air[1]) * 1.6
+	env.ambient_light_energy = float(_night_air[1]) * 3.6
 	_apply_exposure()
 
 
@@ -1427,7 +1460,7 @@ func _on_camera_toggled(on: bool) -> void:
 	if on:
 		hud.mission.set_finder(film, player.zoom, false)
 		hud.mission.show_map(false)
-		_boost_exposure(2.4 if stage in ["yard", "board"] else (3.0 if stage == "street" else 1.4))
+		_boost_exposure(2.0 if stage in ["yard", "board"] else (3.0 if stage == "street" else 1.4))
 	else:
 		_restore_exposure()
 
@@ -1544,9 +1577,12 @@ func _blank_print() -> Texture2D:
 
 func _record_photo(key: String, tex: Texture2D) -> void:
 	if key.begins_with("decoy"):
+		_photo_mark(actors.get(key), false)
 		hud.mission.show_print(tex, "A stranger", "Just a traveler off the late train. Not one of the seven, and that's film you won't get back.", "")
 		_after_miss()
 		return
+	if MEN.has(key):
+		_photo_mark(actors.get(key), true)
 	photos.append(key)
 	var title := ""
 	var sub := ""
@@ -1570,6 +1606,68 @@ func _record_photo(key: String, tex: Texture2D) -> void:
 		sub = String(info[1])
 	hud.mission.show_print(tex, title, sub, stamp, slot, caption)
 	_after_photo(key)
+
+
+var _mark_tex := {}
+
+
+func _photo_mark(a, good: bool) -> void:
+	## a little green check floats over his head for a second: that was one of them, and he's on film.
+	## A stranger gets a red cross instead. It shows through walls and stays the same size at any distance.
+	if a == null or not is_instance_valid(a) or not (a as Node3D).visible:
+		return
+	var sp := Sprite3D.new()
+	sp.texture = _mark_texture(good)
+	sp.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	sp.no_depth_test = true
+	sp.shaded = false
+	sp.fixed_size = true
+	sp.pixel_size = 0.0008
+	sp.render_priority = 10
+	sp.position = Vector3(0.0, 2.25, 0.0)
+	sp.scale = Vector3.ONE * 0.3
+	(a as Node3D).add_child(sp)
+	var tw := sp.create_tween()
+	tw.tween_property(sp, "scale", Vector3.ONE * 1.15, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(sp, "scale", Vector3.ONE, 0.1)
+	tw.tween_interval(1.1)
+	tw.set_parallel(true)
+	tw.tween_property(sp, "modulate:a", 0.0, 0.45)
+	tw.tween_property(sp, "position:y", 2.55, 0.45)
+	tw.chain().tween_callback(sp.queue_free)
+
+
+func _mark_texture(good: bool) -> Texture2D:
+	## drawn once: a round badge, green with a white check or dark red with a white cross
+	if _mark_tex.has(good):
+		return _mark_tex[good]
+	var n := 64
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	var c := Vector2(n, n) / 2.0
+	var fill := Color("2f9e55") if good else Color("a8322a")
+	var rim := Color("123d22") if good else Color("3d1210")
+	var strokes: Array = [[Vector2(18, 33), Vector2(28, 43)], [Vector2(28, 43), Vector2(47, 22)]] if good else \
+		[[Vector2(21, 21), Vector2(43, 43)], [Vector2(43, 21), Vector2(21, 43)]]
+	for y in n:
+		for x in n:
+			var p := Vector2(x + 0.5, y + 0.5)
+			var d := p.distance_to(c)
+			var col := Color(0, 0, 0, 0)
+			if d < 30.5:
+				col = rim
+			if d < 27.0:
+				col = fill.lerp(fill.lightened(0.25), clampf((c.y - p.y) / 27.0, 0.0, 1.0))
+			for st in strokes:
+				var a0: Vector2 = st[0]
+				var b0: Vector2 = st[1]
+				var t := clampf((p - a0).dot(b0 - a0) / (b0 - a0).length_squared(), 0.0, 1.0)
+				if p.distance_to(a0.lerp(b0, t)) < 4.2 and d < 27.0:
+					col = Color(1, 1, 1)
+			col.a *= clampf(31.0 - d, 0.0, 1.0)
+			img.set_pixel(x, y, col)
+	var tex := ImageTexture.create_from_image(img)
+	_mark_tex[good] = tex
+	return tex
 
 
 func _after_photo(key: String) -> void:
@@ -2251,20 +2349,36 @@ func on_link(meta: String) -> bool:
 func shot_setup(what: String) -> void:
 	## --shot ... setup=<what>: freeze a moment of the chapter to look at
 	match what:
-		"rear":
-			# two of them on the observation platform steps, the rear door open
+		"rear", "doors":
+			# two of them going in at the Senator's platform-side door, another at the lane side
 			var n = actors["nelson"]
 			n.visible = true
-			n.place(mk("rear_step_2"), 0.0)
-			n.face_point_from(mk("rear_step_2"), mk("rear_step_4"))
+			n.place(mk("door_e_2"), 0.0)
+			n.face_point_from(mk("door_e_2"), mk("door_e_4"))
 			n.play("Walk", 0.0, 0.6)
 			var ar = actors["arthur"]
 			ar.visible = true
-			ar.place(mk("rear_step_0") + Vector3(0.4, 0, 0.9), 0.0)
-			ar.face_point_from(mk("rear_approach"), mk("rear_step_0"))
+			ar.place(mk("door_e_0") + Vector3(0.9, 0, 0.0), 0.0)
+			ar.face_point_from(mk("way_north_4"), mk("door_e_0"))
 			ar.play("Walk", 0.0, 0.7)
-			if rear_door:
-				rear_door.rotation.y = -1.35
+			var pw = actors["paul"]
+			pw.visible = true
+			pw.place(mk("door_w_1"), 0.0)
+			pw.face_point_from(mk("door_w_1"), mk("door_w_4"))
+			pw.play("Walk", 0.0, 0.6)
+			if door_e:
+				door_e.rotation.y = 1.4
+			if door_w:
+				door_w.rotation.y = -1.4
+		"lineup":
+			# the seven side by side mid-stride, to see how each one walks
+			var keys := ["nelson", "arthur", "abe", "harry", "frank", "paul", "ben"]
+			for i in keys.size():
+				var a = actors[keys[i]]
+				a.visible = true
+				a.place(Vector3(-21.4 + i * 1.45, 0.0, 23.2), PI / 2.0)
+				a.play("Walk", 0.0, 1.0)
+				a.anim.seek(0.13 * float(i), true)
 		"front":
 			# the player halfway up the front steps, the vestibule door swung in
 			player.place(mk("board_4"), 0.0)
@@ -2289,7 +2403,7 @@ func shot_setup(what: String) -> void:
 			# looking through the Kodak at a man on the platform, from under the tarp
 			var n = actors["nelson"]
 			n.visible = true
-			n.place(mk("rear_approach"), -PI / 2.0)
+			n.place(mk("way_north_4"), -PI / 2.0)
 			player.has_camera = true
 			_give_camera()
 			stage = "yard"
@@ -2297,7 +2411,7 @@ func shot_setup(what: String) -> void:
 			hud.mission.set_clock("The train leaves in", 312.0)
 			hud.set_objective("Photograph all seven men before they go into the Senator's car.   Q for the camera.")
 			player.hide_at(mk("hide_tarp"), mk_yaw("hide_tarp") + PI, 0.7)
-			player.yaw = _yaw_to(mk("hide_tarp"), mk("rear_approach"))
+			player.yaw = _yaw_to(mk("hide_tarp"), mk("way_north_4"))
 			player.set_camera_up(true)
 			player.fp_pitch = 0.02
 			player.zoom = 1.6
@@ -2336,7 +2450,13 @@ func autotest() -> void:
 	print("  got out by the gate: stage ", stage, ", clock ", int(_clock))
 	player.global_position = mk("gate_in")
 	await _until(_is_stage.bind("yard"), 5.0)
-	print("AUTOTEST in the yard: clock ", int(_clock), ", watchmen watching ", guards[0].watching)
+	var near_gate := 0
+	for g in guards:
+		if (g as Node3D).global_position.distance_to(mk("gate_in")) < 10.0:
+			near_gate += 1
+	print("AUTOTEST in the yard: clock ", int(_clock), ", watchmen watching at once ", guards[0].watching)
+	await get_tree().create_timer(GRACE_SECONDS + 0.5).timeout
+	print("  after the grace: watching ", guards[0].watching, ", watchmen within 10 m of the gate then ", near_gate)
 	print("  HUD root ", hud.root.size, " mission ", hud.mission.size, " finder ", hud.mission.finder.size, " frame ", hud.mission.frame_rect())
 	await get_tree().create_timer(2.0).timeout
 	var moving := 0
@@ -2502,6 +2622,93 @@ func _until(cond: Callable, timeout: float, skip := false) -> void:
 		t += get_process_delta_time()
 	if t >= timeout:
 		print("AUTOTEST timed out waiting")
+
+
+## godot --headless --path godot -- --routetest
+## Sweeps a man-sized capsule (0.65 m to 1.75 m off the ground, so rails, planks and step edges don't count)
+## along every way the seven come, up the car's steps and in, and along every traveler's path, and prints
+## anything solid it passes through. The invisible walls that keep you in the yard are left out.
+func routetest() -> void:
+	start()
+	await _settle("hoboken")
+	for f in 3:
+		await get_tree().physics_frame
+	var skip: Array[RID] = []
+	for n in level.find_children("*", "CollisionObject3D", true, false):
+		var par := n.get_parent()
+		if String(n.name).begins_with("Bounds") or (par != null and String(par.name).begins_with("Bounds")):
+			skip.append((n as CollisionObject3D).get_rid())
+	for n in get_tree().root.find_children("*", "CharacterBody3D", true, false):
+		skip.append((n as CollisionObject3D).get_rid())
+	for n in get_tree().root.find_children("*", "AnimatableBody3D", true, false):
+		skip.append((n as CollisionObject3D).get_rid())
+	var paths := {}
+	for way in ["fence", "gate", "north", "street"]:
+		var side := "w" if way in ["fence", "gate"] else "e"
+		paths[way] = _way(way) + _door_path(side)
+	for t in TRAVELER_PATHS.size():
+		var pts := []
+		for n in TRAVELER_PATHS[t]:
+			pts.append(mk("traveler_%d" % int(n)))
+		paths["traveler %d" % t] = pts
+	var bad := 0
+	for nm in paths.keys():
+		var pts: Array = paths[nm]
+		print("ROUTE ", nm, ": ", pts.size(), " points")
+		for i in range(pts.size() - 1):
+			var hits := _sweep(pts[i], pts[i + 1], skip)
+			if not hits.is_empty():
+				bad += 1
+				print("  leg %d  %s -> %s  runs into %s" % [i, str(pts[i]), str(pts[i + 1]), str(hits)])
+	# a control: straight through the freight house and the Senator's car must run into both
+	var ctl := _sweep(Vector3(-24.0, 0.0, -5.0), Vector3(8.0, 0.0, -20.0), skip)
+	print("ROUTETEST control (should hit the freight house and the train): ", ctl)
+	print("ROUTETEST done, legs with something in the way: ", bad)
+	# then really send four of them, one each way, at eight times speed, and see that each gets aboard
+	stage = "yard"
+	for g in guards:
+		g.active = false
+	for k in MEN.keys():
+		photos.append(String(k))
+	_routes = ["street", "fence", "gate", "north", "street", "street", "street"]
+	_run += 1
+	Engine.time_scale = 8.0
+	for i in 4:
+		_arrival_live(i, _run)
+	var t := 0.0
+	while _boarded.size() < 4 and t < 240.0:
+		await get_tree().process_frame
+		t += get_process_delta_time()
+	Engine.time_scale = 1.0
+	for i in 4:
+		var key := String(ARRIVALS[i][0])
+		print("ROUTETEST ", key, " by the ", _routes[i], " way: aboard ", _boarded.has(key))
+	get_tree().quit()
+
+
+func _sweep(a: Vector3, b: Vector3, skip: Array[RID]) -> Array:
+	var space := level.get_world_3d().direct_space_state
+	var cap := CapsuleShape3D.new()
+	cap.radius = 0.26
+	cap.height = 1.1
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = cap
+	q.exclude = skip
+	var out := []
+	var n := int(ceil(a.distance_to(b) / 0.2)) + 1
+	for k in n + 1:
+		var p := a.lerp(b, float(k) / float(n))
+		q.transform = Transform3D(Basis(), p + Vector3(0, 1.2, 0))
+		for r in space.intersect_shape(q, 4):
+			var c = r["collider"]
+			var nm := "?"
+			if c is Node:
+				nm = String((c as Node).name)
+				if (c as Node).get_parent():
+					nm = String((c as Node).get_parent().name) + "/" + nm
+			if not out.has(nm):
+				out.append(nm)
+	return out
 
 
 ## godot --headless --path godot -- --stealthtest

@@ -137,10 +137,13 @@ def gait(P, p, stance, a, lift, heel_lift=0.05, toe_off=0.5, strike=-0.25):
 
 
 def cycle(ps, name, P, stance, a, lift, hip_base, bob, lean, arm_swing, elbow, run=False, sneak=False, carry=False, lantern=False,
-          v_ref=None, sway=0.035):
+          v_ref=None, sway=0.035, arms="swing", glance=0.0, reps=1):
     """One looping step cycle. v_ref, if given, sets the cycle length so the planted foot moves at
     exactly v_ref meters a second: the game divides its walking speed by the same number, so feet
-    never slide however fast or slow a man walks."""
+    never slide however fast or slow a man walks.
+    arms: how he carries his arms, so no two of the seven walk alike ("swing", "cane", "valise",
+    "pockets", "coat", "pocket_r", "stiff", "swagger"). glance turns his head to look about, once
+    over reps strides (the loop is that many strides long)."""
     k = ps.k
     if v_ref:
         P = 2.0 * a * k / (stance * v_ref)
@@ -148,14 +151,15 @@ def cycle(ps, name, P, stance, a, lift, hip_base, bob, lean, arm_swing, elbow, r
         if not run and not sneak:
             need = 0.85 - math.sqrt(max(0.85 ** 2 - a ** 2, 0.01))
             hip_base = max(hip_base, need - bob + 0.008)
-    frames = max(8, int(round(P * FPS)))
+    frames = max(8, int(round(P * FPS))) * reps
     rig = ps.rig
     _clear(rig)
     act = _begin(rig, name)
     for f in range(frames + 1):
-        p = f / frames
+        p = f / frames * reps
         ps.reset()
         w = 2 * math.pi * p
+        W = 2 * math.pi * f / frames        # once round the whole loop
         drop = (hip_base + bob * math.cos(2 * w)) * k if not run else (hip_base - bob * math.cos(2 * w + 0.6)) * k
         ps.move("Hips", (0, 0, -drop))
         for side, off in (("L", 0.0), ("R", 0.5)):
@@ -163,13 +167,19 @@ def cycle(ps, name, P, stance, a, lift, hip_base, bob, lean, arm_swing, elbow, r
                                        toe_off=0.3 if sneak else (0.7 if run else 0.5))
             ps.leg(side, drop, fwd, up, pitch, toe)
         yaw = 0.07 * math.cos(w) * (1.4 if run else 1.0)
+        roll = 1.8 if arms == "swagger" else (0.5 if arms == "stiff" else 1.0)
+        tilt = 0.05 if arms == "valise" else 0.0          # leaning against the weight in his right hand
+        chest_out = -0.06 if arms == "swagger" else 0.0
+        look = glance * math.sin(W)
         ps.rot("Hips", rx=lean * 0.3, rz=-yaw, ry=sway * math.sin(w))
-        ps.rot("Spine", rx=lean * 0.5, rz=yaw * 0.6)
-        ps.rot("Chest", rx=lean * 0.3 + (0.02 * math.sin(2 * w)), rz=yaw * 0.9)
-        ps.rot("Neck", rx=-lean * 0.55)
-        ps.rot("Head", rx=-lean * 0.35, rz=-yaw * 0.4)
+        ps.rot("Spine", rx=lean * 0.5, rz=yaw * 0.6, ry=tilt)
+        ps.rot("Chest", rx=lean * 0.3 + (0.02 * math.sin(2 * w)) + chest_out, rz=yaw * 0.9 * roll, ry=tilt * 0.6)
+        ps.rot("Neck", rx=-lean * 0.55, rz=look * 0.4)
+        ps.rot("Head", rx=-lean * 0.35 + chest_out * 0.8, rz=-yaw * 0.4 + look * 0.6, ry=-tilt * 1.2)
         sw = arm_swing * math.cos(w)
-        if carry:
+        if arms != "swing" and arms != "swagger" and not (carry or lantern or sneak or run):
+            _walk_arms(ps, arms, sw, arm_swing, elbow, w)
+        elif carry:
             _carry_arm(ps, "L")
             ps.rot("UpperArm.R", rx=-sw * 0.6, ry=-0.15)
             ps.rot("LowerArm.R", rx=-elbow)
@@ -193,6 +203,49 @@ def cycle(ps, name, P, stance, a, lift, hip_base, bob, lean, arm_swing, elbow, r
             ps.rot("Hand.R", rx=-0.1)
         ps.key(f + 1)
     _finish(rig, act, name, frames)
+
+
+def _walk_arms(ps, arms, sw, arm_swing, elbow, w):
+    """How one of the seven carries his arms on a walk. rx < 0 swings forward; the left arm is on +X."""
+    if arms == "cane":
+        # a cane in the right hand, reaching ahead and planted as the left foot comes down
+        ps.rot("UpperArm.R", rx=-0.22 - 0.6 * arm_swing * math.cos(w), ry=-0.2)
+        ps.rot("LowerArm.R", rx=-0.42)
+        ps.rot("Hand.R", rx=0.3)
+        ps.rot("UpperArm.L", rx=sw * 0.6, ry=0.15)
+        ps.rot("LowerArm.L", rx=-elbow)
+    elif arms == "valise":
+        # the heavy valise in the right hand: that arm hangs out from him and hardly swings; the other works for two
+        ps.rot("UpperArm.R", rx=-sw * 0.15, ry=-0.3)
+        ps.rot("LowerArm.R", rx=-0.05)
+        ps.rot("UpperArm.L", rx=sw * 1.25, ry=0.2)
+        ps.rot("LowerArm.L", rx=-elbow - max(0.0, -sw) * 0.5)
+    elif arms == "pockets":
+        # both hands in his coat pockets, elbows out a little
+        for side, sg in (("L", 1), ("R", -1)):
+            ps.rot("UpperArm." + side, rx=0.08 + sg * sw * 0.12, ry=0.26 * sg)
+            ps.rot("LowerArm." + side, rx=-0.8)
+            ps.rot("Hand." + side, rx=0.25)
+    elif arms == "coat":
+        # holding his coat shut at the chest against the cold, the left arm swinging
+        ps.rot("UpperArm.R", rx=-0.16, ry=0.05)
+        ps.rot("LowerArm.R", rx=-1.95, rz=0.45)
+        ps.rot("Hand.R", rx=0.3)
+        ps.rot("UpperArm.L", rx=sw, ry=0.15)
+        ps.rot("LowerArm.L", rx=-elbow - max(0.0, -sw) * 0.5)
+    elif arms == "pocket_r":
+        # right hand in his pocket, the left swinging free and wide
+        ps.rot("UpperArm.R", rx=0.08, ry=-0.26)
+        ps.rot("LowerArm.R", rx=-0.8)
+        ps.rot("Hand.R", rx=0.25)
+        ps.rot("UpperArm.L", rx=sw * 1.15, ry=0.15)
+        ps.rot("LowerArm.L", rx=-elbow - max(0.0, -sw) * 0.5)
+    elif arms == "stiff":
+        # arms close at his sides and barely moving: a tall man who holds himself very straight
+        ps.rot("UpperArm.L", rx=sw * 0.35, ry=0.1)
+        ps.rot("UpperArm.R", rx=-sw * 0.35, ry=-0.1)
+        ps.rot("LowerArm.L", rx=-0.35)
+        ps.rot("LowerArm.R", rx=-0.35)
 
 
 def _carry_arm(ps, side):
@@ -500,12 +553,14 @@ SNEAK_V = 1.0
 def build_all(rig, k, kinds, gait=None):
     """gait: this man's own walk (stride a, stance, lean, arm_swing, elbow, lift, bob, sway)."""
     ps = Poser(rig, k)
-    g = {"stance": 0.6, "a": 0.36, "lift": 0.11, "hip_base": 0.045, "bob": 0.018, "lean": 0.04, "arm_swing": 0.32, "elbow": 0.22, "sway": 0.035}
+    g = {"stance": 0.6, "a": 0.36, "lift": 0.11, "hip_base": 0.045, "bob": 0.018, "lean": 0.04, "arm_swing": 0.32, "elbow": 0.22, "sway": 0.035,
+         "arms": "swing", "glance": 0.0, "reps": 1}
     g.update(gait or {})
     if "base" in kinds:
         idle(ps, "Idle")
         cycle(ps, "Walk", P=1.0, stance=g["stance"], a=g["a"], lift=g["lift"], hip_base=g["hip_base"], bob=g["bob"], lean=g["lean"],
-              arm_swing=g["arm_swing"], elbow=g["elbow"], v_ref=WALK_V, sway=g["sway"])
+              arm_swing=g["arm_swing"], elbow=g["elbow"], v_ref=WALK_V, sway=g["sway"], arms=g["arms"], glance=g["glance"],
+              reps=g["reps"])
     if "run" in kinds:
         cycle(ps, "Run", P=0.66, stance=0.36, a=0.44, lift=0.28, hip_base=0.07, bob=0.03, lean=0.22, arm_swing=0.7, elbow=1.25, run=True, v_ref=RUN_V)
     if "sneak" in kinds:

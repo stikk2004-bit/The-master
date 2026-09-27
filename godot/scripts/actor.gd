@@ -19,6 +19,8 @@ var idle_anim := "Idle"
 var current := ""
 var body: AnimatableBody3D
 var _turning := false
+var follow_ground := false   # lift the feet onto whatever is underfoot (plank crossings, ballast) between marks
+var _lift := 0.0
 var _turn_to := 0.0
 
 
@@ -74,6 +76,8 @@ func place(pos: Vector3, yaw: float) -> void:
 	global_position = pos
 	model.rotation.y = yaw
 	path.clear()
+	_lift = 0.0
+	model.position.y = 0.0
 
 
 func yaw() -> float:
@@ -148,10 +152,26 @@ func _physics_process(delta: float) -> void:
 		var want := atan2(to.x, to.z)
 		model.rotation.y = lerp_angle(model.rotation.y, want, 1.0 - exp(-10.0 * delta))
 		play(walk_anim, 0.25, clampf(speed / WALK_REF, 0.5, 1.6))
+		if follow_ground:
+			_ground_lift(delta)
 	elif _turning:
 		model.rotation.y = lerp_angle(model.rotation.y, _turn_to, 1.0 - exp(-6.0 * delta))
 		if absf(angle_difference(model.rotation.y, _turn_to)) < 0.02:
 			_turning = false
+
+
+func _ground_lift(delta: float) -> void:
+	## the marks sit on the ground, but plank crossings and ballast stand a little proud of it:
+	## raise the model onto whatever is underfoot, never below the path itself
+	var q := PhysicsRayQueryParameters3D.create(global_position + Vector3(0, 0.75, 0), global_position + Vector3(0, -0.2, 0))
+	if body:
+		q.exclude = [body.get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	var want := 0.0
+	if not hit.is_empty():
+		want = maxf(0.0, (hit["position"] as Vector3).y - global_position.y)
+	_lift = move_toward(_lift, want, delta * 4.0)
+	model.position.y = _lift
 
 
 func hand_node(side := "R") -> Node3D:

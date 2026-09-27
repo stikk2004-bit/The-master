@@ -445,15 +445,15 @@ func _build_mouse_hint() -> void:
 
 # ------------------------------------------------------------------ sneak eye
 func _build_eye() -> void:
-	## the signal lamp: green, amber, red as the watchmen notice you (signal_lamp.gd)
+	## the sneak eye: shut while nobody has noticed you, opening as someone does (sneak_eye.gd)
 	eye = Control.new()
-	eye.set_script(preload("res://scripts/signal_lamp.gd"))
-	eye.custom_minimum_size = Vector2(96, 104)
-	eye.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	eye.offset_left = -48
-	eye.offset_right = 48
-	eye.offset_top = 112
-	eye.offset_bottom = 216
+	eye.set_script(preload("res://scripts/sneak_eye.gd"))
+	eye.custom_minimum_size = Vector2(120, 60)
+	eye.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	eye.offset_left = -60
+	eye.offset_right = 60
+	eye.offset_top = -330
+	eye.offset_bottom = -270
 	eye.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	eye.visible = false
 	root.add_child(eye)

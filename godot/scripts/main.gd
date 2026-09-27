@@ -95,6 +95,10 @@ func _ready() -> void:
 		player.place(SPAWN_LOBBY, 0.0)
 		rooms.roomtest()
 		return
+	if OS.get_cmdline_user_args().has("--routetest"):
+		_build_level("exterior")
+		chapter.routetest()
+		return
 	if OS.get_cmdline_user_args().has("--stealthtest"):
 		_build_level("exterior")
 		chapter.stealthtest()

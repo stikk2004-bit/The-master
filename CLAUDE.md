@@ -85,10 +85,10 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
     there (no more pressing R after getting out of the motorcar or out of a hiding place).
   - `scripts/hud.gd`: title, prompt bar, reading panel with [url] links, guest book, toast, chime,
     location banners, subtitles (say), letterbox, chapter cards, objective line, a second line under it
-    for countdowns and photo tallies (set_timer), the signal lamp (signal_lamp.gd: green, amber, red as the
-    watchmen notice you; it replaced a Skyrim-style eye). The location banner is a punched ticket slip that
-    drops in from the top; the E prompt is a green enamel sign with a brass key token. Keep the interface
-    1910 railroad and club, not borrowed from other games.
+    for countdowns and photo tallies (set_timer), the sneak eye (sneak_eye.gd: shut while nobody has noticed
+    you, opening and going amber, then red, as they do; the owner tried a railroad signal lamp in its place
+    and wanted the eye back). The location banner is a punched ticket slip that drops in from the top; the
+    E prompt is a green enamel sign with a brass key token.
   - `scripts/lessons.gd`: the four studies as data: 13 chapters, grown and kid text, one quiz each.
   - `scripts/money_sim.gd`: the Money Machine (gold, bank loans, spending and taxes, the Fed, run 40 years).
   - `scripts/npc.gd`: the hooded figure who walks the lawn. `scripts/sound.gd`: ambience loader.
@@ -137,7 +137,10 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
   Hair is a shell that lies on the skull (charlib.head_deform) and tucks under the skin at the hairline;
   `bald` clears the top from the forehead back. `spectacles=True` gives round wire glasses (Vanderlip).
   Each man has his own `gait` in build_characters.py CAST (stride a, stance, lean, arm swing, lift, bob,
-  sway). Walk cycles are authored for a fixed ground speed (anims.py WALK_V 1.7, RUN_V 3.9, SNEAK_V 1.0 m/s),
+  sway, and `arms`: anims._walk_arms styles cane, valise, pockets, coat, pocket_r, stiff, swagger; `glance`
+  turns the head about once every `reps` strides). The seven: Nelson leans on a cane, Arthur lugs the valise,
+  Abe has his hands in his pockets, Harry swaggers, Frank is stiff and upright, Paul holds his coat shut and
+  looks over his shoulder, Ben walks with one hand in a pocket. Walk cycles are authored for a fixed ground speed (anims.py WALK_V 1.7, RUN_V 3.9, SNEAK_V 1.0 m/s),
   so the game plays them at speed / that speed and feet never slide.
   Cloth materials are named `CH_<texture>__<what>` (look.gd lays that texture on using the mesh UVs, which
   are in meters). `CHX_` materials are left alone (eyes, lamp glass). Hats and carried things are separate
@@ -158,9 +161,11 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
   door prompt radius.
 - Clubhouse doors swing: split_doors.py makes each leaf its own object `<door>_SwingP` / `_SwingN` with its
   origin on the hinge, plus a lit `<door>_Glow` panel behind. `main.swing_door(door)` turns them, and
-  `main._through_door(door, level, pos, yaw)` opens the door, then goes through. The Senator's car has two
-  doors of its own the chapter swings: `RearDoor` (out onto the observation platform) and `FrontDoor`
-  (the west door of the front vestibule, in).
+  `main._through_door(door, level, pos, yaw)` opens the door, then goes through. The Senator's car has three
+  doors of its own the chapter swings: `EntryDoorW` and `EntryDoorE`, both sides of its south vestibule,
+  where the seven go in (the owner marked them on the map), and `FrontDoor`, the west door of its dark north
+  vestibule, your way in. The train, from the back: an ordinary coach, the Senator's car (build_1910
+  CAR_Y0..CAR_Y1, Blender y 13.3..34.3, no observation platform any more), a coach, the tender, the engine.
 - Panels: `open_panel(title, bbcode)` or `_show(kind, title, bbcode)`. Clickable links use `[url=meta]` and
   land in `_on_link(meta)` (chapter1910 and rooms get first look). `url:<address>` opens a web page.
   `main.after_panel` runs once when the panel closes.
@@ -169,11 +174,18 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
 - The chapter, as played: a letter, then Jekyll (a made-up character; the evidence panel says so) by his
   motorcar at the west end of River Street. He hands over the Kodak (12 exposures), three stones and his sketch of the yard (M).
   Drive to the freight gate, walk in, and the clock starts (7:00). Past the gate the yard reads lighter than
-  the street (chapter _yard_air: exposure x1.3, ambient x1.6; the Kodak and motorcar boosts ride on that). The seven arrive while you play, each at his own pace and by one of
-  three ways, shuffled every try: by cab up River Street, on foot down the station platform, or across the
-  yard from the far side and up the west steps (_arrival_live, MARK_station_walk_*, yard_walk_*, west_step_*).
-  They tip their hats to the porter, climb the observation platform steps and go in at the rear door; each
-  must be photographed first (the print pops up with his full name and position) or the yard starts over.
+  the street (chapter _yard_air: exposure x1.3, ambient x3.6; the Kodak and motorcar boosts ride on that),
+  and the freight house's brick (HB_BrickDark) is lighter so its walls read. Coming in at the gate you get
+  6 s before anybody can notice you (GRACE_SECONDS) and the watchmen keep off the gate for 25 s more
+  (guard.leave_area / keep_away). The seven arrive while you play, each at his own pace, the four ways the
+  owner drew (MARK_way_<fence|gate|north|street>_N): through a side gate in the west fence, in at the freight
+  gate and up the lane, up the river-landing stairs north of the station and down the platform, or by cab on
+  River Street and up the platform steps. Nelson always comes by cab; the rest are shuffled every try. The
+  fence and gate ways end at the Senator's lane-side door (MARK_door_w_*), the other two at his platform-side
+  door where the porter waits (MARK_door_e_*). Scripted people walk straight from mark to mark, so every
+  way was laid to miss the crates (--routetest checks it); actor.follow_ground lifts them onto the plank
+  crossings and ballast. Each must be photographed first (the print pops up with his full name and position,
+  and a green check floats over his head for a second; a red cross over a stranger) or the yard starts over.
   Four travelers who look like some of the men (same models) wander the traveler_* marks; photographing
   one wastes film ("A stranger"). Five watchmen roam with beams and two lookouts watch from up high. Hide under the tarp wagon (it looks onto the platform), in the empty boxcar, or in the shed doorway;
   climb crates or the boxcar ladders. All seven taken, board at the car's dark front steps (a faint diamond
@@ -192,9 +204,14 @@ worn, textured surfaces, heavy air, warm lamplight against cool shadow, drained 
 - `godot --headless --path godot -- --stealthtest` watches the roaming watchmen for a minute from under the tarp
   (how far they get, how spread out they stay, whether a hidden player stays hidden), then stands in a beam.
 - `godot --headless --path godot -- --roomtest` uses everything in the three rooms.
-- `--shot` extras: `swing=Door_Library` opens a door first; `setup=rear|front|finder|jekyll|yard|map` stages a
-  chapter moment (chapter1910 shot_setup; finder looks through the Kodak from under the tarp; yard is the yard
-  as played with its HUD; map holds up Jekyll's sketch).
+- `godot --headless --path godot -- --routetest` sweeps a man-sized capsule along the seven's four ways, up
+  the car steps and in, and along the travelers' paths, printing anything solid in the way (with a control leg
+  that must hit), then sends one man each way at 8x speed and checks all four get aboard.
+- `--shot` extras: `swing=Door_Library` opens a door first; `setup=doors|front|finder|jekyll|yard|map|lineup`
+  stages a chapter moment (chapter1910 shot_setup; doors: men going in at both entry doors; finder looks
+  through the Kodak from under the tarp; yard is the yard as played with its HUD; map holds up Jekyll's
+  sketch; lineup puts the seven side by side mid-stride). Big lit views are slow on the software renderer:
+  pass frames=40 or so.
 - After adding textures or models, run `godot --headless --path godot --import` once.
 
 ## Status
@@ -205,7 +222,8 @@ Ways into 1910: take the railroad ticket from the hooded figure after he's talke
 ticket on the lobby desk.
 Stealth: five watchmen roam the yard at random with lantern beams, spread out (about 14 m apart on average in
 the stealthtest) and sweeping every corner between them, plus two lookouts up high turning their lanterns.
-The owner wants it very hard to get the pictures without being seen.
+The owner wants it very hard to get the pictures without being seen (but not caught the moment you
+walk in the gate).
 The hooded figure gives one line per E press (no faster than one a second) and offers the ticket with the
 third; toasts sit a third of the way down the screen so they never cover the clock or banners.
 Animations beyond walking: the player has Throw, Climb (ladders) and Mantle; the seven have TipHat.

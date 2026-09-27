@@ -10,7 +10,7 @@ Controls
   Mouse        look around (click the window if the mouse is loose)
   W A S D      walk (arrow keys work too)
   Shift        run
-  C or Ctrl    sneak (stay low and quiet; the signal lamp up top goes amber, then red, as somebody notices you)
+  C or Ctrl    sneak (stay low and quiet; the eye opens as somebody notices you)
   Space        jump
   E            use whatever you're standing near, or move a conversation along; hide; get out of the motorcar
   Q            once you have the pocket Kodak: hold it up to your eye (again to put it away)
@@ -29,8 +29,10 @@ Where to go
   1910: the hooded figure on the lawn has an old railroad ticket for you, and so does the lobby desk.
         Read the letter, meet Jekyll, drive to the freight gate. A printable map of the yard is in
         art/maps/hoboken_yard_map.pdf (in the full project folder). Get a picture of all seven men before
-        they go into the Senator's car. They come by cab, down the station platform, or across the yard,
-        a different way each try, and not everybody in a good coat is one of the seven. Keep out of the
+        they go into the Senator's car. They come four ways: a side gate in the back fence, the
+        freight gate, the stairs up from the river, or a cab on River Street, and they go in at the
+        Senator's car's two doors. A green check over a man's head means you got him; not everybody in a
+        good coat is one of the seven. Keep out of the
         lantern beams, mind the lookouts up high, then get aboard at the car's dark
         front steps before the train leaves. Keep out of the steward's sight, and don't be holding the
         camera up when Arthur looks up. Get caught and that part starts over.
