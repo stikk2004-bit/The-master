@@ -84,7 +84,7 @@ const MATS := {
 	"HB_PlatformTop": ["concrete", 3.0, {"desat": 0.2, "grime": 0.0}],
 	"HB_PlatformEdge": ["brick", 1.8, {"orig": false, "bright": 0.7}],
 	"HB_Brick": ["brick", 2.2, {"orig": false, "bright": 0.75, "moss": 0.1}],
-	"HB_BrickDark": ["brick", 2.4, {"orig": false, "bright": 0.45, "desat": 0.3}],
+	"HB_BrickDark": ["brick", 2.4, {"orig": false, "bright": 0.95, "desat": 0.25}],
 	"HB_Stone": ["stone_blocks", 2.0, {"desat": 0.2}],
 	"HB_Tin": ["tin_roof", 2.2, {"orig": false, "bright": 0.7, "grime": 0.0}],
 	"HB_Iron": ["iron", 1.0, {"orig": false}],

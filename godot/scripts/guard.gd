@@ -366,6 +366,25 @@ func _note_seen(delta: float) -> void:
 			seen[i] = now
 
 
+var keep_away := Vector3.INF   # while set he won't choose a spot near here (the gate, just after you come in)
+var keep_away_r := 0.0
+
+
+func leave_area(p: Vector3, r: float) -> void:
+	## walk off somewhere well away from p, and keep choosing spots away from it until keep_away is cleared
+	keep_away = p
+	keep_away_r = r
+	if perched or spots.is_empty():
+		return
+	if global_position.distance_to(p) < r or (target != Vector3.INF and target.distance_to(p) < r):
+		state = "patrol"
+		_said = false
+		path.clear()
+		wait_left = 0.0
+		target = _pick_spot()
+		walk(_nav_path(global_position, target), patrol_speed * 1.15, walk_anim)
+
+
 func _pick_spot() -> Vector3:
 	## somewhere not too near, not too far, well away from the other watchmen and where they're going,
 	## and above all somewhere nobody has looked for a while
@@ -376,6 +395,8 @@ func _pick_spot() -> Vector3:
 		if _recent.has(i):
 			continue
 		var s: Vector3 = spots[i]
+		if keep_away != Vector3.INF and s.distance_to(keep_away) < keep_away_r:
+			continue
 		var d_self := global_position.distance_to(s)
 		var crowd := 30.0
 		for g in others:

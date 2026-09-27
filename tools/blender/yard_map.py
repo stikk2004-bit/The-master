@@ -326,17 +326,20 @@ def main():
     L(-24.1, 61.0, "Tool house", f_small)
 
     # the Senator's car
-    L(TRACK_B := 4.0, -1.5, "THE SENATOR'S CAR", f_num, angle=90, fill=(250, 230, 210))
+    L(4.0, 24.4, "THE SENATOR'S CAR", f_num, angle=90, fill=(250, 230, 210))
+    L(4.0, 2.5, "coach", f_small, angle=90, fill=(220, 214, 200))
 
     # where things are
     if "MARK_gate_in" in mk:
         gx, gy, _ = mk["MARK_gate_in"]
         diamond(d, P(gx, gy - 2.1), 11, (236, 220, 190))
         L(gx + 5.6, gy - 3.6, "Freight gate", f_lab)
-    if "MARK_rear_door" in mk:
-        rx, ry, _ = mk["MARK_rear_door"]
-        diamond(d, P(rx + 0.4, ry), 10, (220, 120, 100))
-        L(rx + 1.2, ry - 2.2, "", f_small)
+    for k in ("MARK_door_w_4", "MARK_door_e_4"):
+        if k in mk:
+            rx, ry, _ = mk[k]
+            diamond(d, P(rx, ry), 10, (220, 120, 100))
+    if "MARK_way_fence_0" in mk:
+        L(-24.6, 23.2, "Side gate", f_small)
     if "MARK_vestibule" in mk:
         vx, vy, _ = mk["MARK_vestibule"]
         diamond(d, P(vx + 1.2, vy), 12, (240, 214, 120))
@@ -356,17 +359,16 @@ def main():
 
     # the ways the seven come
     ways = []
-    if "MARK_cab_stop" in mk:
-        ways.append([(30.0, -31.0), (12.0, -30.4), (9.5, -26.0), (8.0, -16.0)])
-    if "MARK_station_walk_0" in mk:
-        ways.append([(mk["MARK_station_walk_%d" % k][0], mk["MARK_station_walk_%d" % k][1]) for k in range(3)])
-    j = 0
-    yard_way = []
-    while "MARK_yard_walk_%d" % j in mk:
-        yard_way.append((mk["MARK_yard_walk_%d" % j][0], mk["MARK_yard_walk_%d" % j][1]))
-        j += 1
-    if yard_way:
-        ways.append(yard_way[1:])
+    for way in ("fence", "gate", "north", "street"):
+        pts = []
+        j = 0
+        while "MARK_way_%s_%d" % (way, j) in mk:
+            pts.append((mk["MARK_way_%s_%d" % (way, j)][0], mk["MARK_way_%s_%d" % (way, j)][1]))
+            j += 1
+        if way == "street" and pts:
+            pts = [(30.0, -30.6)] + pts          # the cab comes along River Street from the east
+        if pts:
+            ways.append(pts)
     for w in ways:
         polyline_arrow(d, [P(x, y) for x, y in w], RED_INK, 3)
 
@@ -406,9 +408,9 @@ def main():
     d.rectangle([col1 + 2, ky + rows * 5 + 2, col1 + 28, ky + rows * 5 + 22], fill=FILL["HB_Path"], outline=INK_SOFT)
     d.text((col1 + 44, ky + rows * 5 + 12), "Walks and plank crossings", font=f_lab, fill=INK, anchor="lm")
     arrow(d, (col1, ky + rows * 6 + 14), (col1 + 32, ky + rows * 6 + 14), RED_INK, 3, head=12)
-    d.text((col1 + 44, ky + rows * 6 + 14), "The ways the seven come: by cab, out of the station, across the yard", font=f_lab, fill=INK, anchor="lm")
+    d.text((col1 + 44, ky + rows * 6 + 14), "The ways the seven come: side gate, freight gate, river stairs, a cab", font=f_lab, fill=INK, anchor="lm")
     diamond(d, (col1 + 15, ky + rows * 7 + 16), 11, (220, 120, 100))
-    d.text((col1 + 44, ky + rows * 7 + 16), "The rear door, where the seven go in", font=f_lab, fill=INK, anchor="lm")
+    d.text((col1 + 44, ky + rows * 7 + 16), "The Senator's doors, where the seven go in", font=f_lab, fill=INK, anchor="lm")
     diamond(d, (col2 + 15, ky + rows * 7 + 16), 12, (240, 214, 120))
     d.text((col2 + 44, ky + rows * 7 + 16), "The dark front steps: your way aboard", font=f_lab, fill=INK, anchor="lm")
     d.text((W / 2, H - 34), "Five watchmen walk the yard where they please. Mind the beams.", font=f_sub, fill=INK_SOFT, anchor="mm")
